@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Idle Village</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <div id="topbar" class="panel">
+      <span id="status" class="dot connecting" title="connection"></span>
+      <span id="clock">--:--</span>
+      <span id="date">Day 1 of spring, year 1</span>
+      <span id="weather">clear</span>
+      <span id="speed" class="muted">1x</span>
+      <span id="stock" class="muted"></span>
+      <span id="viewers" class="muted" title="viewers">👁 0</span>
+    </div>
+
+    <div id="admin" class="panel hidden">
+      <button data-cmd="pause">Pause</button>
+      <button data-cmd="resume">Resume</button>
+      <span class="sep"></span>
+      <button data-speed="1">1x</button>
+      <button data-speed="4">4x</button>
+      <button data-speed="20">20x</button>
+      <button data-speed="100">100x</button>
+      <span class="sep"></span>
+      <button data-cmd="reset" class="danger">Reset world</button>
+      <span id="adminMsg" class="muted"></span>
+    </div>
+
+    <div id="feed" class="panel"></div>
+
+    <div id="inspector" class="panel hidden">
+      <button id="inspectorClose" class="close">×</button>
+      <div id="inspectorBody"></div>
+    </div>
+
+    <div id="hint" class="muted">drag to pan · scroll to zoom · click a villager</div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

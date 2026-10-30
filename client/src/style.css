@@ -1,0 +1,56 @@
+:root {
+  --bg: #1b1f24;
+  --panel: rgba(20, 24, 30, 0.86);
+  --text: #e8e6e3;
+  --muted: #9aa3ad;
+  --accent: #e0a458;
+  --danger: #c0504d;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--text);
+}
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+#game { position: fixed; inset: 0; }
+#game canvas { display: block; }
+.panel {
+  position: fixed;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  backdrop-filter: blur(4px);
+}
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+#topbar { top: 10px; left: 10px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; max-width: calc(100vw - 20px); }
+#admin { top: 56px; left: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#admin .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.15); margin: 0 4px; }
+button {
+  background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit;
+}
+button:hover { background: rgba(255,255,255,0.16); }
+button.danger { border-color: var(--danger); color: #f0a8a6; }
+button.active { border-color: var(--accent); color: var(--accent); }
+#feed {
+  bottom: 10px; left: 10px; width: min(380px, calc(100vw - 20px)); max-height: 34vh; overflow-y: auto;
+  display: flex; flex-direction: column-reverse; gap: 4px; font-size: 12px;
+}
+#feed .ev { opacity: 0.9; }
+#feed .ev .t { color: var(--muted); margin-right: 6px; }
+#inspector { top: 10px; right: 10px; width: min(300px, calc(100vw - 20px)); max-height: calc(100vh - 20px); overflow-y: auto; }
+#inspector .close { position: absolute; top: 4px; right: 6px; background: none; border: none; font-size: 16px; }
+#inspector h2 { margin: 0 0 4px; font-size: 15px; color: var(--accent); }
+#inspector .row { margin: 3px 0; }
+#inspector .bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 2px; }
+#inspector .bar > div { height: 100%; background: var(--accent); }
+#inspector ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
+#hint { position: fixed; bottom: 10px; right: 10px; font-size: 11px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #777; }
+.dot.connected { background: #6abf69; }
+.dot.connecting { background: #e0a458; }
+.dot.disconnected { background: #c0504d; }
+@media (max-width: 600px) {
+  #feed { max-height: 22vh; }
+  #hint { display: none; }
+}
