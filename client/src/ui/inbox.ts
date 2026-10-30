@@ -10,20 +10,21 @@ export function setupInbox(isAdmin: boolean, send: (cmd: AdminCommand) => void):
 }
 
 export function renderInbox(petitions: Petition[]): void {
+  const proposed = petitions.filter((p) => p.status === "proposed");
   const open = petitions.filter((p) => p.status === "open");
-  const recent = petitions.filter((p) => p.status !== "open").slice(-3).reverse();
-  const key = JSON.stringify([open.map((p) => p.id), recent.map((p) => p.id + p.status), !!sendCmd]);
+  const recent = petitions.filter((p) => p.status !== "open" && p.status !== "proposed").slice(-3).reverse();
+  const key = JSON.stringify([proposed.map((p) => p.id + p.supporters.length), open.map((p) => p.id), recent.map((p) => p.id + p.status), !!sendCmd]);
   if (key === lastKey) return;
   lastKey = key;
 
   document.getElementById("inboxCount")!.textContent = open.length ? `${open.length} waiting` : "";
   const list = document.getElementById("inboxList")!;
   list.innerHTML = "";
-  if (!open.length && !recent.length) {
+  if (!open.length && !recent.length && !proposed.length) {
     list.innerHTML = `<div class="empty">No one has asked for anything yet.</div>`;
     return;
   }
-  for (const p of [...open, ...recent]) list.appendChild(renderPetition(p));
+  for (const p of [...open, ...proposed, ...recent]) list.appendChild(renderPetition(p));
 }
 
 function renderPetition(p: Petition): HTMLElement {
@@ -31,8 +32,20 @@ function renderPetition(p: Petition): HTMLElement {
   div.className = `pet ${p.status}`;
   const what = p.amount ? `${p.amount} ${p.ask}` : p.ask === "newcomer" ? "a newcomer" : "a blessing";
   const day = Math.floor(p.tick / TICKS_PER_DAY) + 1;
-  div.innerHTML = `<div class="who">${esc(p.villagerName)} asks for ${esc(what)} <span class="muted">· day ${day}</span></div>
+  const verb = p.status === "proposed" ? "is gathering the village to ask for" : "asks for";
+  div.innerHTML = `<div class="who">${esc(p.villagerName)} ${verb} ${esc(what)} <span class="muted">· day ${day}</span></div>
     <div class="reason">"${esc(p.reason)}"</div>`;
+  if (p.status === "proposed") {
+    const g = document.createElement("div");
+    g.className = "muted";
+    g.textContent = `${p.supporters.length} of ${p.needed} voices at the shrine so far`;
+    div.appendChild(g);
+  } else if (p.supporters.length > 1) {
+    const g = document.createElement("div");
+    g.className = "muted";
+    g.textContent = `${p.supporters.length} villagers stood together for this`;
+    div.appendChild(g);
+  }
   if (p.status !== "open" && p.response) {
     const r = document.createElement("div");
     r.className = "muted";

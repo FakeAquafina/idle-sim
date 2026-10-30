@@ -2,6 +2,7 @@
 
 import { DAYS_PER_YEAR, PETITION_NEED_THRESHOLD, STRUCTURES, type Villager, type WorldState } from "@idle-sim/shared";
 import { describeTime } from "../../sim/clock.ts";
+import { currentProposal, describeAsk } from "../../sim/petitions.ts";
 import { countResourceTiles, distance, structuresWithFunction } from "../../sim/world.ts";
 
 function describeGoal(v: Villager): string {
@@ -74,12 +75,20 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
     : "You have never petitioned the shrine.";
   const openPetitions = w.petitions.filter((p) => p.status === "open");
   const openCount = openPetitions.length;
+  const proposal = currentProposal(w);
   const shortages = (Object.keys(PETITION_NEED_THRESHOLD) as (keyof typeof PETITION_NEED_THRESHOLD)[])
-    .filter((k) => s[k] < PETITION_NEED_THRESHOLD[k] && !openPetitions.some((p) => p.ask === k))
+    .filter((k) => s[k] < PETITION_NEED_THRESHOLD[k] && !openPetitions.some((p) => p.ask === k) && proposal?.ask !== k)
     .map((k) => `${k} (${s[k]})`);
-  const shrineNote = shortages.length
-    ? `\n## Shrine\nThe village is short of ${shortages.join(", ")} and nobody has asked the provider for ${shortages.length > 1 ? "them" : "it"} yet. Someone could go and ask; the rest should keep working.`
-    : "";
+  let shrineNote = "";
+  if (proposal) {
+    const mineAlready = proposal.supporters.includes(v.id);
+    const who = proposal.supporters.map((id) => w.villagers.find((x) => x.id === id)?.name ?? "someone").join(", ");
+    shrineNote += `\n## Shrine\n${proposal.villagerName} has called a gathering to ask the provider for ${describeAsk(proposal)}: "${proposal.reason}". Standing there now: ${who} (${proposal.supporters.length} of ${proposal.needed} voices needed).` +
+      (mineAlready ? " You are already among them." : " You may go and support it (action support) or stay away if you disagree.");
+  }
+  if (shortages.length) {
+    shrineNote += `${proposal ? "\n" : "\n## Shrine\n"}The village is short of ${shortages.join(", ")} and nobody has called a gathering about ${shortages.length > 1 ? "them" : "it"} yet.`;
+  }
 
   return `## You
 ${v.name}, ${v.stage}, ${years} years old. Traits: ${v.traits.join(", ")}. Quirk: ${v.quirk}. Skill: ${v.skill}.

@@ -38,9 +38,13 @@ switch AI off entirely from the admin bar.
 
 ## Petitions, gifts, rumors
 
-You are the unseen provider. When the village genuinely lacks something a
-villager may walk to the shrine and ask for it (wood, stone, food, seeds, a
-newcomer, or a blessing). Requests appear in the **Shrine petitions** panel.
+You are the unseen provider, and you listen to the village rather than to one
+voice. When the village genuinely lacks something (wood, stone, food, seeds, a
+newcomer, or a blessing) a villager may walk to the shrine and call a gathering.
+The request only reaches you once at least half the village (minimum two) has
+walked there to stand with them; a gathering nobody joins within a sim day
+breaks up. Open requests appear in the **Shrine petitions** panel, with
+gatherings still collecting voices shown underneath.
 Admins can grant, half-grant, grant with a whispered message, or deny. Gifts
 appear as a crate by the storehouse; villagers remember both answers and
 silence. Admins can also drop unprompted gifts and whisper rumors that villagers
@@ -56,6 +60,14 @@ one message per minute).
 1 sim day = 1 real hour at speed 1x. A season is 7 days, a year 28 days.
 The server saves `server/data/world.json` every 30 seconds and on shutdown, and
 appends every event to `server/data/events.jsonl`.
+
+## Dev scripts
+
+```bash
+cd server
+npx tsx scripts/smoke-plan.ts 2            # one real Claude call per villager, printed
+npx tsx scripts/make-world.ts --seeds 0    # fresh world.json with chosen stock (stop the server first)
+```
 
 ## Tests
 

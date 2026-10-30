@@ -4,7 +4,7 @@
 
 import { z } from "zod/v4";
 
-export const PLAN_ACTIONS = ["build", "farm", "gather", "talk_to", "rest", "eat", "wander", "socialize", "petition"] as const;
+export const PLAN_ACTIONS = ["build", "farm", "gather", "talk_to", "rest", "eat", "wander", "socialize", "petition", "support"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 
 export const PETITION_ASKS = ["wood", "stone", "food", "seeds", "newcomer", "blessing"] as const;
@@ -24,7 +24,7 @@ export const PlanOutputSchema = z.object({
     .string()
     .nullable()
     .describe("build: a building kind. gather: wood or stone. talk_to: a villager's name. Otherwise null."),
-  petition: PetitionRequestSchema.nullable().describe("Only when action is petition."),
+  petition: PetitionRequestSchema.nullable().describe("Only when action is petition (proposing a gathering at the shrine)."),
   memory_note: z.string().nullable().describe("A short note worth remembering, or null."),
 });
 
@@ -33,7 +33,8 @@ export type PetitionRequest = z.infer<typeof PetitionRequestSchema>;
 
 // ---- Petition records (live in WorldState) -----------------------------------
 
-export type PetitionStatus = "open" | "granted" | "denied";
+/** proposed = gathering support at the shrine; open = enough voices, waiting on the provider. */
+export type PetitionStatus = "proposed" | "open" | "granted" | "denied" | "lapsed";
 
 export interface Petition {
   id: string;
@@ -44,6 +45,12 @@ export interface Petition {
   reason: string;
   tick: number;
   status: PetitionStatus;
+  /** Villagers who have come to the shrine to back this request (proposer included). */
+  supporters: string[];
+  /** Voices needed before the petition opens. */
+  needed: number;
+  /** Proposal lapses if not enough voices gather by this tick. */
+  expiresTick: number;
   grantedAmount?: number;
   /** Optional one-line message from the provider, delivered as a whisper. */
   response?: string;
@@ -57,6 +64,10 @@ export interface Rumor {
 
 export const MAX_OPEN_PETITIONS = 3;
 export const MAX_OPEN_PER_VILLAGER = 1;
+/** Minimum voices for a petition to open (also at least half the living villagers). */
+export const MIN_SUPPORTERS = 2;
+/** Sim days a proposal waits for support before lapsing. */
+export const PROPOSAL_DAYS = 1;
 
 /** Stock below which a villager may reasonably ask the provider for a resource. */
 export const PETITION_NEED_THRESHOLD: Record<"wood" | "stone" | "food" | "seeds", number> = {

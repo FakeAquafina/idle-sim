@@ -3,6 +3,7 @@
 
 import { STRUCTURES, type Goal, type GoalType, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "./events.ts";
+import { currentProposal, villageLacks } from "./petitions.ts";
 import { chance, randInt } from "./rng.ts";
 import {
   canAfford,
@@ -36,6 +37,12 @@ export function chooseGoal(w: WorldState, v: Villager): Goal {
     const other = nearestOther(w, v);
     if (other && chance(w, 0.5) && ok("talk_to")) return { type: "talk_to", villagerId: other.id, chatted: false };
     if (fire) return { type: "socialize_at", structureId: fire.id, untilTick: tick + 900 };
+  }
+
+  // --- a gathering at the shrine for something the village really lacks ---
+  const proposal = currentProposal(w);
+  if (proposal && !proposal.supporters.includes(v.id) && villageLacks(w, proposal.ask) && ok("support") && chance(w, 0.6)) {
+    return { type: "support", petitionId: proposal.id };
   }
 
   // --- children don't work ---

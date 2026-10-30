@@ -65,6 +65,8 @@ button.active { border-color: var(--accent); color: var(--accent); }
 #inbox .pet .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 #inbox .pet.granted .who::after { content: " · granted"; color: #6abf69; font-weight: normal; }
 #inbox .pet.denied .who::after { content: " · silent"; color: var(--muted); font-weight: normal; }
+#inbox .pet.lapsed .who::after { content: " · dispersed"; color: var(--muted); font-weight: normal; }
+#inbox .pet.proposed { opacity: 0.85; border-left: 2px solid var(--accent); padding-left: 6px; }
 #inbox .empty { color: var(--muted); }
 #ai.warn { color: #f0a8a6; }
 @media (max-width: 560px) { #inbox { display: none; } }

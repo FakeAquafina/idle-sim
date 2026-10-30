@@ -31,6 +31,11 @@ export function loadWorld(dir: string): WorldState | null {
     w.petitions ??= [];
     w.rumors ??= [];
     for (const v of w.villagers) v.cooldowns ??= {};
+    for (const p of w.petitions) {
+      p.supporters ??= [p.villagerId];
+      p.needed ??= 1;
+      p.expiresTick ??= p.tick;
+    }
     return w;
   } catch (err) {
     console.warn("[persist] could not read world.json:", err);

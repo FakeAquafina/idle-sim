@@ -55,7 +55,8 @@ export type GoalType =
   | "eat"
   | "talk_to"
   | "socialize_at"
-  | "petition";
+  | "petition"
+  | "support";
 
 export type Goal =
   | { type: "wander"; target: Vec2 }
@@ -72,7 +73,8 @@ export type Goal =
   | { type: "eat" }
   | { type: "talk_to"; villagerId: string; chatted: boolean }
   | { type: "socialize_at"; structureId: string; untilTick: number }
-  | { type: "petition"; ask: string; amount?: number; reason: string };
+  | { type: "petition"; ask: string; amount?: number; reason: string }
+  | { type: "support"; petitionId: string };
 
 export interface Speech {
   text: string;

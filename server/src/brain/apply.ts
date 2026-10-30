@@ -9,7 +9,7 @@ import {
   type WorldState,
 } from "@idle-sim/shared";
 import { emitEvent } from "../sim/events.ts";
-import { canPetition } from "../sim/petitions.ts";
+import { canPetition, currentProposal } from "../sim/petitions.ts";
 import { canAfford, countResourceTiles, findPlacement, placeStructure, structuresWithFunction, villageCenter } from "../sim/world.ts";
 
 export interface ApplyResult {
@@ -81,6 +81,13 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
       if (!s) return { goal: null, reason: "could not place the blueprint" };
       emitEvent(w, "blueprint", `${v.name} laid out a new ${STRUCTURES[kind].label.toLowerCase()}.`, { villagerIds: [v.id], pos: spot });
       return { goal: { type: "build", structureId: s.id } };
+    }
+
+    case "support": {
+      const p = currentProposal(w);
+      if (!p) return { goal: null, reason: "nobody is calling a gathering right now" };
+      if (p.supporters.includes(v.id)) return { goal: null, reason: "you already stand with that request" };
+      return { goal: { type: "support", petitionId: p.id } };
     }
 
     case "petition": {

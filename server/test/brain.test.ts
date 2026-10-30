@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PlanOutputSchema, type PlanOutput, type WorldState } from "@idle-sim/shared";
 import { planToGoal } from "../src/brain/apply.ts";
 import { costOf } from "../src/brain/budget.ts";
-import { canPetition, denyPetition, grantPetition, openPetition } from "../src/sim/petitions.ts";
+import { canPetition, denyPetition, grantPetition, lapseStaleProposals, proposePetition, supportPetition, supportNeeded } from "../src/sim/petitions.ts";
 import { seedVillagers } from "../src/sim/seed.ts";
 import { tickWorld } from "../src/sim/tick.ts";
 import type { Persona } from "../src/sim/villager.ts";
@@ -84,35 +84,77 @@ describe("petitions", () => {
     expect(canPetition(w, v, { ask: "wood", amount: 500, reason: "r" })).toMatch(/between/);
   });
 
+  it("needs half the village to gather before a petition opens", () => {
+    const w = world();
+    w.storehouse.seeds = 0;
+    const [a, b, c, d] = w.villagers;
+    expect(supportNeeded(w)).toBe(3); // 6 villagers
+    const p = proposePetition(w, a, { ask: "seeds", amount: 5, reason: "bare fields" });
+    expect(p.status).toBe("proposed");
+    expect(p.supporters).toEqual([a.id]);
+    expect(canPetition(w, b, { ask: "wood", amount: 5, reason: "r" })).toMatch(/gathering is already/);
+    expect(grantPetition(w, p.id)).toMatch(/not gathered/);
+    expect(supportPetition(w, b, p.id)).toBe(false);
+    expect(supportPetition(w, b, p.id)).toBe(false); // same voice twice doesn't count
+    expect(p.supporters.length).toBe(2);
+    expect(supportPetition(w, c, p.id)).toBe(true);
+    expect(p.status).toBe("open");
+    expect(w.events.some((e) => e.kind === "petition" && e.text.includes(c.name))).toBe(true);
+    expect(c.memory.some((m) => m.includes("gathered"))).toBe(true);
+    expect(supportPetition(w, d, p.id)).toBe(false); // already open
+  });
+
+  it("a proposal nobody joins lapses after a day", () => {
+    const w = world();
+    w.storehouse.food = 0;
+    const a = w.villagers[0];
+    const p = proposePetition(w, a, { ask: "food", amount: 10, reason: "hunger" });
+    w.clock.tick = p.expiresTick;
+    lapseStaleProposals(w);
+    expect(p.status).toBe("lapsed");
+    expect(a.memory.some((m) => m.includes("Nobody came"))).toBe(true);
+    expect(canPetition(w, a, { ask: "food", amount: 10, reason: "r" })).toBeNull(); // can try again
+  });
+
   it("caps open petitions per villager, per resource, and village-wide", () => {
     const w = world();
     w.storehouse = { wood: 0, stone: 0, food: 0, seeds: 0 };
-    const [a, b, c, d] = w.villagers;
-    openPetition(w, a, { ask: "wood", amount: 10, reason: "r" });
+    const [a, b, c, d, e, f] = w.villagers;
+    const openWith = (proposer: typeof a, ask: "wood" | "stone" | "food" | "seeds") => {
+      const p = proposePetition(w, proposer, { ask, amount: 5, reason: "r" });
+      for (const s of [a, b, c, d, e, f]) if (p.status === "proposed") supportPetition(w, s, p.id);
+      return p;
+    };
+    openWith(a, "wood");
     expect(canPetition(w, a, { ask: "stone", amount: 10, reason: "r" })).toMatch(/already have/);
     expect(canPetition(w, b, { ask: "wood", amount: 10, reason: "r" })).toMatch(/already asked for wood/);
-    openPetition(w, b, { ask: "stone", amount: 10, reason: "r" });
-    openPetition(w, c, { ask: "food", amount: 10, reason: "r" });
-    expect(canPetition(w, d, { ask: "seeds", amount: 5, reason: "r" })).toMatch(/enough open/);
+    openWith(b, "stone");
+    openWith(c, "food");
+    expect(canPetition(w, d, { ask: "seeds", amount: 5, reason: "r" })).toMatch(/enough requests/);
   });
 
-  it("granting delivers resources and leaves a memory; denying leaves a different one", () => {
+  it("granting delivers resources and leaves memories for everyone who gathered", () => {
     const w = world();
     w.storehouse.wood = 0;
-    const [a, b] = w.villagers;
-    const p1 = openPetition(w, a, { ask: "wood", amount: 20, reason: "the roofs leak" });
-    const p2 = openPetition(w, b, { ask: "food", amount: 10, reason: "we hunger" });
+    w.storehouse.food = 0;
+    const [a, b, c, d] = w.villagers;
+    const p1 = proposePetition(w, a, { ask: "wood", amount: 20, reason: "the roofs leak" });
+    supportPetition(w, b, p1.id);
+    supportPetition(w, c, p1.id);
     expect(grantPetition(w, p1.id, { amount: 10, message: "make it last" })).toBeNull();
     expect(w.storehouse.wood).toBe(10);
-    expect(w.petitions.find((p) => p.id === p1.id)?.status).toBe("granted");
     expect(a.memory.some((m) => m.includes("less than I asked"))).toBe(true);
     expect(a.memory.some((m) => m.includes("make it last"))).toBe(true);
+    expect(b.memory.some((m) => m.includes("asked for together"))).toBe(true);
+    const p2 = proposePetition(w, d, { ask: "food", amount: 10, reason: "we hunger" });
+    supportPetition(w, b, p2.id);
+    supportPetition(w, c, p2.id);
     expect(denyPetition(w, p2.id)).toBeNull();
-    expect(b.memory.some((m) => m.includes("silent"))).toBe(true);
+    expect(d.memory.some((m) => m.includes("silent"))).toBe(true);
     expect(grantPetition(w, p2.id)).toMatch(/already resolved/);
   });
 
-  it("a petition goal walks to the shrine and files the request", () => {
+  it("a petition goal walks to the shrine and calls the gathering; autopilot villagers join", () => {
     const w = world();
     w.storehouse.seeds = 0;
     const v = w.villagers[0];
@@ -122,8 +164,10 @@ describe("petitions", () => {
     v.source = "ai";
     for (let i = 0; i < 1500 && w.petitions.length === 0; i++) tickWorld(w);
     expect(w.petitions.length).toBe(1);
-    expect(w.petitions[0].villagerId).toBe(v.id);
-    expect(w.events.some((e) => e.kind === "petition")).toBe(true);
+    expect(w.petitions[0].status).toBe("proposed");
+    for (let i = 0; i < 6000 && w.petitions[0].status === "proposed"; i++) tickWorld(w);
+    expect(w.petitions[0].status).toBe("open");
+    expect(w.petitions[0].supporters.length).toBeGreaterThanOrEqual(3);
   });
 });
 

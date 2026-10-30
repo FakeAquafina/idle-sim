@@ -8,3 +8,4 @@ server/data/petitions.json
 .DS_Store
 *.log
 server/data/settings.json
+server/data/*.backup.json

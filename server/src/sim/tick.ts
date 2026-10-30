@@ -6,6 +6,7 @@ import { chooseGoal } from "./autopilot.ts";
 import { updateClock } from "./clock.ts";
 import { emitEvent } from "./events.ts";
 import { stepGoal } from "./goals/index.ts";
+import { lapseStaleProposals } from "./petitions.ts";
 import { ageOneDay, moveAlongPath, updateNeeds } from "./villager.ts";
 import { assignHomes, distance, structureCenter, structuresWithFunction } from "./world.ts";
 
@@ -18,6 +19,7 @@ export function tickWorld(w: WorldState): void {
   else if (newDay) emitEvent(w, "day", `Day ${w.clock.dayOfSeason + 1} of ${w.clock.season}, year ${w.clock.year + 1}.`);
 
   growFarms(w);
+  lapseStaleProposals(w);
   if (newDay) assignHomes(w);
 
   for (const v of w.villagers) {

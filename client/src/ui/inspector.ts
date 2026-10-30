@@ -51,7 +51,8 @@ function describeGoal(v: VillagerView): string {
     case "eat": return "going to eat";
     case "talk_to": return "looking for a chat";
     case "socialize_at": return "warming up by the fire";
-    case "petition": return "speaking to the shrine";
+    case "petition": return "calling a gathering at the shrine";
+    case "support": return "going to stand at the shrine";
   }
 }
 

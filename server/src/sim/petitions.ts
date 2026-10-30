@@ -3,7 +3,9 @@
 import {
   MAX_OPEN_PETITIONS,
   MAX_OPEN_PER_VILLAGER,
+  MIN_SUPPORTERS,
   PETITION_NEED_THRESHOLD,
+  PROPOSAL_DAYS,
   type Petition,
   type PetitionAsk,
   type PetitionRequest,
@@ -22,27 +24,52 @@ function isResourceAsk(a: PetitionAsk): a is ResourceAsk {
   return (RESOURCE_ASKS as readonly string[]).includes(a);
 }
 
+/** Is the village actually short of this? Used by autopilot and validation alike. */
+export function villageLacks(w: WorldState, ask: PetitionAsk): boolean {
+  if (isResourceAsk(ask)) return w.storehouse[ask] < PETITION_NEED_THRESHOLD[ask];
+  if (ask === "newcomer") {
+    const beds = structuresWithFunction(w, "shelter").reduce((n, h) => n + (2 - h.ownerIds.length), 0);
+    return beds > 0;
+  }
+  return true; // a blessing can always be hoped for
+}
+
 /** Returns a reason the petition is not allowed, or null if it is fine. */
 export function canPetition(w: WorldState, v: Villager, req: PetitionRequest): string | null {
   if (structuresWithFunction(w, "petition").length === 0) return "there is no shrine";
-  const open = w.petitions.filter((p) => p.status === "open");
-  if (open.length >= MAX_OPEN_PETITIONS) return "the shrine already has enough open requests";
-  if (open.filter((p) => p.villagerId === v.id).length >= MAX_OPEN_PER_VILLAGER) return "you already have a request waiting";
-  const same = open.find((p) => p.ask === req.ask);
+  const pending = w.petitions.filter((p) => p.status === "open" || p.status === "proposed");
+  if (pending.some((p) => p.status === "proposed")) return "a gathering is already being called at the shrine; support it or wait";
+  if (pending.length >= MAX_OPEN_PETITIONS) return "the shrine already has enough requests waiting";
+  if (pending.filter((p) => p.villagerId === v.id).length >= MAX_OPEN_PER_VILLAGER) return "you already have a request waiting";
+  const same = pending.find((p) => p.ask === req.ask);
   if (same) return `${same.villagerName} has already asked for ${req.ask}`;
   if (isResourceAsk(req.ask)) {
-    if (w.storehouse[req.ask] >= PETITION_NEED_THRESHOLD[req.ask]) return `the village still has enough ${req.ask}`;
+    if (!villageLacks(w, req.ask)) return `the village still has enough ${req.ask}`;
     if (req.amount !== null && (req.amount < 1 || req.amount > 30)) return "ask for between 1 and 30 units";
-  } else if (req.ask === "newcomer") {
-    const houses = structuresWithFunction(w, "shelter");
-    const beds = houses.reduce((n, h) => n + (2 - h.ownerIds.length), 0);
-    if (beds <= 0) return "there is no spare bed for a newcomer";
+  } else if (req.ask === "newcomer" && !villageLacks(w, "newcomer")) {
+    return "there is no spare bed for a newcomer";
   }
   return null;
 }
 
-export function openPetition(w: WorldState, v: Villager, req: { ask: PetitionAsk; amount?: number; reason: string }): Petition {
+/** Voices needed for a proposal to open: at least MIN_SUPPORTERS, at least half the village, never more than everyone. */
+export function supportNeeded(w: WorldState): number {
+  const alive = w.villagers.filter((v) => v.alive).length;
+  return Math.max(1, Math.min(alive, Math.max(MIN_SUPPORTERS, Math.ceil(alive / 2))));
+}
+
+export function currentProposal(w: WorldState): Petition | undefined {
+  return w.petitions.find((p) => p.status === "proposed");
+}
+
+export function describeAsk(p: { ask: PetitionAsk; amount: number | null }): string {
+  return p.amount ? `${p.amount} ${p.ask}` : p.ask === "newcomer" ? "another pair of hands" : "a blessing";
+}
+
+/** A villager proposes a petition at the shrine. It opens only once enough villagers gather to support it. */
+export function proposePetition(w: WorldState, v: Villager, req: { ask: PetitionAsk; amount?: number; reason: string }): Petition {
   const amount = isResourceAsk(req.ask) ? (req.amount ?? 10) : null;
+  const needed = supportNeeded(w);
   const p: Petition = {
     id: `p${w.nextId++}`,
     villagerId: v.id,
@@ -51,14 +78,58 @@ export function openPetition(w: WorldState, v: Villager, req: { ask: PetitionAsk
     amount,
     reason: req.reason.slice(0, 200),
     tick: w.clock.tick,
-    status: "open",
+    status: "proposed",
+    supporters: [v.id],
+    needed,
+    expiresTick: w.clock.tick + PROPOSAL_DAYS * w.clock.ticksPerDay,
   };
   w.petitions.push(p);
   if (w.petitions.length > 50) w.petitions.splice(0, w.petitions.length - 50);
-  const what = amount ? `${amount} ${req.ask}` : req.ask === "newcomer" ? "another pair of hands" : "a blessing";
-  emitEvent(w, "petition", `${v.name} kneels at the shrine and asks for ${what}: "${p.reason}"`, { villagerIds: [v.id] });
-  remember(v, `I asked the provider for ${what}.`);
+  const what = describeAsk(p);
+  if (needed <= 1) {
+    openPetition(w, p);
+  } else {
+    emitEvent(w, "proposal", `${v.name} calls the village to the shrine to ask for ${what}: "${p.reason}"`, { villagerIds: [v.id] });
+    remember(v, `I called a gathering at the shrine to ask for ${what}.`);
+  }
   return p;
+}
+
+/** Another villager arrives at the shrine to back the proposal. Returns true if that opened it. */
+export function supportPetition(w: WorldState, v: Villager, id: string): boolean {
+  const p = w.petitions.find((x) => x.id === id);
+  if (!p || p.status !== "proposed" || p.supporters.includes(v.id)) return false;
+  p.supporters.push(v.id);
+  remember(v, `I stood with ${p.villagerName} at the shrine asking for ${describeAsk(p)}.`);
+  if (p.supporters.length >= p.needed) {
+    openPetition(w, p);
+    return true;
+  }
+  emitEvent(w, "support", `${v.name} joins ${p.villagerName} at the shrine (${p.supporters.length} of ${p.needed} voices).`, { villagerIds: [v.id] });
+  return false;
+}
+
+function openPetition(w: WorldState, p: Petition): void {
+  p.status = "open";
+  const names = p.supporters.map((id) => w.villagers.find((v) => v.id === id)?.name ?? "someone");
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  emitEvent(w, "petition", `${list} gather at the shrine and ask the provider for ${describeAsk(p)}: "${p.reason}"`, { villagerIds: p.supporters });
+  for (const id of p.supporters) {
+    const v = w.villagers.find((x) => x.id === id && x.alive);
+    if (v) remember(v, `We gathered at the shrine and asked the provider for ${describeAsk(p)}.`);
+  }
+}
+
+/** Proposals nobody joined in time break up. Call once per tick. */
+export function lapseStaleProposals(w: WorldState): void {
+  for (const p of w.petitions) {
+    if (p.status !== "proposed" || w.clock.tick < p.expiresTick) continue;
+    p.status = "lapsed";
+    p.resolvedTick = w.clock.tick;
+    emitEvent(w, "lapsed", `The gathering ${p.villagerName} called at the shrine breaks up; too few came.`, { villagerIds: [p.villagerId] });
+    const v = w.villagers.find((x) => x.id === p.villagerId && x.alive);
+    if (v) remember(v, `Nobody came when I called the village to the shrine for ${describeAsk(p)}.`);
+  }
 }
 
 export interface GrantOptions {
@@ -71,6 +142,7 @@ export interface GrantOptions {
 export function grantPetition(w: WorldState, id: string, opts: GrantOptions = {}): string | null {
   const p = w.petitions.find((x) => x.id === id);
   if (!p) return "no such petition";
+  if (p.status === "proposed") return "the village has not gathered for this yet";
   if (p.status !== "open") return "petition already resolved";
   const amount = isResourceAsk(p.ask) ? Math.max(0, Math.floor(opts.amount ?? p.amount ?? 10)) : undefined;
   p.status = "granted";
@@ -88,7 +160,9 @@ export function grantPetition(w: WorldState, id: string, opts: GrantOptions = {}
     say(w, petitioner, partial ? "Something is better than nothing. Thank you." : "The provider heard me!", 8);
     if (p.response) remember(petitioner, `The provider whispered: "${p.response}"`);
     for (const o of w.villagers) {
-      if (o.alive && o.id !== petitioner.id && distance(o.pos, petitioner.pos) < 8) remember(o, `${petitioner.name}'s prayer at the shrine was answered.`);
+      if (!o.alive || o.id === petitioner.id) continue;
+      if (p.supporters.includes(o.id)) remember(o, `The provider answered what we asked for together at the shrine.`);
+      else if (distance(o.pos, petitioner.pos) < 8) remember(o, `${petitioner.name}'s prayer at the shrine was answered.`);
     }
   }
   return null;
@@ -97,6 +171,7 @@ export function grantPetition(w: WorldState, id: string, opts: GrantOptions = {}
 export function denyPetition(w: WorldState, id: string, message?: string): string | null {
   const p = w.petitions.find((x) => x.id === id);
   if (!p) return "no such petition";
+  if (p.status === "proposed") return "the village has not gathered for this yet";
   if (p.status !== "open") return "petition already resolved";
   p.status = "denied";
   p.response = message?.slice(0, 200);
