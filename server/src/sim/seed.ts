@@ -1,6 +1,7 @@
 // Populate a fresh world with the starting villagers.
 
 import type { WorldState } from "@idle-sim/shared";
+import { seedAnimals } from "./animals.ts";
 import { emitEvent } from "./events.ts";
 import { randInt } from "./rng.ts";
 import { createVillager, type Persona } from "./villager.ts";
@@ -20,5 +21,6 @@ export function seedVillagers(w: WorldState, personas: Persona[]): void {
     w.villagers.push(createVillager(w, p, tile));
   }
   assignHomes(w);
+  if (w.animals.length === 0) seedAnimals(w);
   emitEvent(w, "founded", `${personas.length} settlers arrive and make camp around the fire.`);
 }

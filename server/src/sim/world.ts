@@ -3,6 +3,7 @@
 import {
   STRUCTURES,
   tileIndex,
+  type Animal,
   type Inventory,
   type ResourceKind,
   type Structure,
@@ -13,7 +14,8 @@ import {
   type WorldState,
 } from "@idle-sim/shared";
 import { makeClock } from "./clock.ts";
-import { nextRandom, randInt } from "./rng.ts";
+import { emitEvent } from "./events.ts";
+import { chance, nextRandom, pick, randInt } from "./rng.ts";
 
 export const DEFAULT_SIZE = 48;
 
@@ -26,7 +28,9 @@ export function createWorld(seed: number, width = DEFAULT_SIZE, height = DEFAULT
     tiles: [],
     structures: [],
     villagers: [],
-    storehouse: { wood: 30, stone: 10, food: 40, seeds: 6 },
+    animals: [],
+    storehouse: { wood: 30, stone: 10, food: 40, seeds: 6, ore: 0 },
+    shortageSince: {},
     clock: makeClock(),
     events: [],
     nextId: 1,
@@ -55,7 +59,7 @@ function blob(w: WorldState, cx: number, cy: number, steps: number, kind: TileKi
   for (let i = 0; i < steps; i++) {
     if (inBounds(w, x, y)) {
       const t = w.tiles[tileIndex(w.width, x, y)];
-      if (t.kind !== "water") w.tiles[tileIndex(w.width, x, y)] = { kind, amount: amount() };
+      if (t.kind !== "water" && t.kind !== "sand") w.tiles[tileIndex(w.width, x, y)] = { kind, amount: amount() };
     }
     const dir = randInt(w, 0, 3);
     if (dir === 0) x++;
@@ -65,6 +69,29 @@ function blob(w: WorldState, cx: number, cy: number, steps: number, kind: TileKi
     // Pull back toward the center so blobs stay compact.
     if (Math.abs(x - cx) > 6) x += x > cx ? -2 : 2;
     if (Math.abs(y - cy) > 6) y += y > cy ? -2 : 2;
+  }
+}
+
+/** Sea along one edge with a wandering shoreline and a sandy beach. */
+function paintCoast(w: WorldState) {
+  const edges = ["north", "south", "east", "west"] as const;
+  const edge = pick(w, edges);
+  w.coast = edge;
+  const along = edge === "north" || edge === "south" ? w.width : w.height;
+  let depth = randInt(w, 3, 5);
+  for (let i = 0; i < along; i++) {
+    depth = Math.max(2, Math.min(7, depth + randInt(w, -1, 1)));
+    const beach = depth + randInt(w, 1, 2);
+    for (let d = 0; d < beach; d++) {
+      const kind: TileKind = d < depth ? "water" : "sand";
+      let x: number;
+      let y: number;
+      if (edge === "north") [x, y] = [i, d];
+      else if (edge === "south") [x, y] = [i, w.height - 1 - d];
+      else if (edge === "west") [x, y] = [d, i];
+      else [x, y] = [w.width - 1 - d, i];
+      if (inBounds(w, x, y)) w.tiles[tileIndex(w.width, x, y)] = { kind, amount: 0 };
+    }
   }
 }
 
@@ -84,36 +111,35 @@ function generateTerrain(w: WorldState) {
     return { x: 2, y: 2 };
   };
 
-  // Dirt patches
+  if (w.width >= 24 && w.height >= 24) paintCoast(w);
+
   for (let i = 0; i < 6; i++) {
     const p = { x: randInt(w, 2, w.width - 3), y: randInt(w, 2, w.height - 3) };
     blob(w, p.x, p.y, 25, "dirt", () => 0);
   }
-  // One lake, sometimes two
   const lakes = nextRandom(w) < 0.4 ? 2 : 1;
   for (let i = 0; i < lakes; i++) {
     const p = farFromCenter();
-    blob(w, p.x, p.y, 120, "water", () => 0);
+    blob(w, p.x, p.y, 100, "water", () => 0);
   }
-  // Forests
   for (let i = 0; i < 6; i++) {
     const p = farFromCenter();
     blob(w, p.x, p.y, 90, "forest", () => randInt(w, 8, 15));
   }
-  // Rock outcrops
   for (let i = 0; i < 4; i++) {
     const p = farFromCenter();
     blob(w, p.x, p.y, 30, "rock", () => randInt(w, 10, 20));
   }
+  // Ore veins hide inside some rock.
+  for (let i = 0; i < w.tiles.length; i++) {
+    if (w.tiles[i].kind === "rock" && chance(w, 0.2)) w.tiles[i] = { kind: "ore", amount: randInt(w, 6, 12) };
+  }
   // Clear the village center
   for (let y = cy - 7; y <= cy + 7; y++) {
-    for (let x = x0(cx); x <= cx + 7; x++) {
+    for (let x = cx - 7; x <= cx + 7; x++) {
       if (!inBounds(w, x, y)) continue;
       if (Math.hypot(x - cx, y - cy) <= 7) w.tiles[tileIndex(w.width, x, y)] = { kind: "grass", amount: 0 };
     }
-  }
-  function x0(c: number) {
-    return c - 7;
   }
 }
 
@@ -148,7 +174,7 @@ export function structureAt(w: WorldState, x: number, y: number): Structure | un
 export function isWalkable(w: WorldState, x: number, y: number): boolean {
   if (!inBounds(w, x, y)) return false;
   const kind = tileAt(w, x, y).kind;
-  if (kind === "water" || kind === "rock") return false;
+  if (kind === "water" || kind === "rock" || kind === "ore") return false;
   return structureAt(w, x, y) === undefined;
 }
 
@@ -184,6 +210,19 @@ export function toTileSet(w: WorldState, tiles: Vec2[]): Set<number> {
   return new Set(tiles.map((t) => tileIndex(w.width, t.x, t.y)));
 }
 
+/** Does the footprint touch at least one tile of these kinds (4-neighbourhood ring)? */
+function footprintTouches(w: WorldState, x: number, y: number, width: number, height: number, kinds: TileKind[]): boolean {
+  for (let yy = y - 1; yy <= y + height; yy++) {
+    for (let xx = x - 1; xx <= x + width; xx++) {
+      const onRing = yy === y - 1 || yy === y + height || xx === x - 1 || xx === x + width;
+      const corner = (yy === y - 1 || yy === y + height) && (xx === x - 1 || xx === x + width);
+      if (!onRing || corner || !inBounds(w, xx, yy)) continue;
+      if (kinds.includes(tileAt(w, xx, yy).kind)) return true;
+    }
+  }
+  return false;
+}
+
 /** Nearest forest/rock tile with resources left that can be reached from a neighbouring tile. */
 export function nearestResourceTile(w: WorldState, from: Vec2, kind: "forest" | "rock"): Vec2 | null {
   let best: Vec2 | null = null;
@@ -202,16 +241,49 @@ export function nearestResourceTile(w: WorldState, from: Vec2, kind: "forest" | 
   return best;
 }
 
-export function countResourceTiles(w: WorldState, kind: "forest" | "rock"): number {
+export function countResourceTiles(w: WorldState, kind: "forest" | "rock" | "ore"): number {
   let n = 0;
   for (const t of w.tiles) if (t.kind === kind && t.amount > 0) n++;
   return n;
 }
 
+export function hasCoast(w: WorldState): boolean {
+  return w.coast !== undefined;
+}
+
+/** Walkable tiles next to water: where one can fish from the beach. */
+export function shoreTiles(w: WorldState, near?: Vec2, limit = 24): Vec2[] {
+  const out: { t: Vec2; d: number }[] = [];
+  for (let y = 0; y < w.height; y++) {
+    for (let x = 0; x < w.width; x++) {
+      if (!isWalkable(w, x, y)) continue;
+      if (!footprintTouches(w, x, y, 1, 1, ["water"])) continue;
+      out.push({ t: { x, y }, d: near ? Math.abs(x - near.x) + Math.abs(y - near.y) : 0 });
+    }
+  }
+  out.sort((a, b) => a.d - b.d);
+  return out.slice(0, limit).map((o) => o.t);
+}
+
+export function nearestWildAnimal(w: WorldState, from: Vec2, kind?: Animal["kind"]): Animal | undefined {
+  let best: Animal | undefined;
+  let bestD = Infinity;
+  for (const a of w.animals) {
+    if (!a.alive || a.tame || a.leaderId) continue;
+    if (kind && a.kind !== kind) continue;
+    const d = distance(a.pos, from);
+    if (d < bestD) {
+      best = a;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
 // ---- Structures ------------------------------------------------------------
 
 export function canAfford(w: WorldState, cost: Inventory): boolean {
-  return (Object.entries(cost) as [ResourceKind, number][]).every(([k, n]) => w.storehouse[k] >= n);
+  return (Object.entries(cost) as [ResourceKind, number][]).every(([k, n]) => (w.storehouse[k] ?? 0) >= n);
 }
 
 export function canPlace(w: WorldState, kind: string, x: number, y: number): boolean {
@@ -224,10 +296,12 @@ export function canPlace(w: WorldState, kind: string, x: number, y: number): boo
       const inside = xx >= x && xx < x + def.w && yy >= y && yy < y + def.h;
       if (inside) {
         const k = tileAt(w, xx, yy).kind;
-        if (k !== "grass" && k !== "dirt") return false;
+        if (k !== "grass" && k !== "dirt" && !(k === "sand" && def.function === "fishing")) return false;
       }
     }
   }
+  if (def.mustTouch === "water" && !footprintTouches(w, x, y, def.w, def.h, ["water"])) return false;
+  if (def.mustTouch === "rock" && !footprintTouches(w, x, y, def.w, def.h, ["rock", "ore"])) return false;
   return true;
 }
 
@@ -268,6 +342,39 @@ export function onStructureBuilt(w: WorldState, s: Structure): void {
     for (let yy = s.y; yy < s.y + s.h; yy++)
       for (let xx = s.x; xx < s.x + s.w; xx++) setTile(w, xx, yy, { kind: "farmland", amount: 0 });
   }
+  if (s.kind === "mine") strikeVein(w, s);
+}
+
+/** A new mine finds whatever the surrounding rock holds. */
+function strikeVein(w: WorldState, s: Structure): void {
+  let rock = 0;
+  let ore = 0;
+  for (let yy = s.y - 2; yy <= s.y + s.h + 1; yy++) {
+    for (let xx = s.x - 2; xx <= s.x + s.w + 1; xx++) {
+      if (!inBounds(w, xx, yy)) continue;
+      const k = tileAt(w, xx, yy).kind;
+      if (k === "rock") rock++;
+      if (k === "ore") ore++;
+    }
+  }
+  const rich = chance(w, 0.25);
+  s.reserve = {
+    stone: 30 + rock * 6 + randInt(w, 0, 20),
+    ore: ore * 6 + randInt(w, 0, 6) + (rich ? 20 : 0),
+  };
+  s.depleted = false;
+  const text =
+    s.reserve.ore >= 20
+      ? "The new mine strikes a rich vein of ore!"
+      : s.reserve.ore > 0
+        ? "The new mine finds good stone and a thread of ore."
+        : "The new mine finds plenty of stone but no ore.";
+  emitEvent(w, "vein", text, { pos: { x: s.x, y: s.y } });
+}
+
+/** 1.25 once a workshop stands: everyone works faster. */
+export function workBonus(w: WorldState): number {
+  return structuresWithFunction(w, "crafting").length > 0 ? 1.25 : 1;
 }
 
 /** Spiral outward from `near` looking for a legal spot. */

@@ -1,7 +1,7 @@
 // WebSocket messages between server and viewers.
 
 import type { Petition, PetitionAsk, Rumor } from "./actions.ts";
-import type { AiStatus, Clock, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
+import type { AiStatus, Animal, Clock, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
 
 /** Villager as sent over the wire: same as Villager but without the path. */
 export type VillagerView = Omit<Villager, "path">;
@@ -23,6 +23,7 @@ export interface DeltaMessage {
   storehouse: Record<ResourceKind, number>;
   villagers: VillagerView[];
   structures: Structure[];
+  animals: Animal[];
   tiles: { i: number; tile: Tile }[];
   petitions: Petition[];
   rumors: Rumor[];

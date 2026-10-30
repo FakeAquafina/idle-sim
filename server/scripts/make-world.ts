@@ -17,6 +17,6 @@ const num = (k: string, d: number) => (args.has(k) ? Number(args.get(k)) : d);
 const personas = JSON.parse(readFileSync(path.join(root, "data/villagers.json"), "utf8"));
 const w = createWorld(num("seed", (Date.now() % 2147483647) | 0));
 seedVillagers(w, personas);
-w.storehouse = { wood: num("wood", 30), stone: num("stone", 10), food: num("food", 40), seeds: num("seeds", 6) };
+w.storehouse = { wood: num("wood", 30), stone: num("stone", 10), food: num("food", 40), seeds: num("seeds", 6), ore: num("ore", 0) };
 saveWorld(path.join(root, "data"), w);
 console.log(`wrote data/world.json: seed ${w.seed}, stock`, w.storehouse);

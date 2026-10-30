@@ -1,9 +1,9 @@
 // Builds the per-call user message: a compact snapshot of what this villager knows.
 
-import { DAYS_PER_YEAR, PETITION_NEED_THRESHOLD, STRUCTURES, type Villager, type WorldState } from "@idle-sim/shared";
+import { DAYS_PER_YEAR, STRUCTURES, type Villager, type WorldState } from "@idle-sim/shared";
 import { describeTime } from "../../sim/clock.ts";
-import { currentProposal, describeAsk } from "../../sim/petitions.ts";
-import { countResourceTiles, distance, structuresWithFunction } from "../../sim/world.ts";
+import { askableNow, currentProposal, describeAsk } from "../../sim/petitions.ts";
+import { countResourceTiles, distance, hasCoast, structuresWithFunction } from "../../sim/world.ts";
 
 function describeGoal(v: Villager): string {
   const g = v.goal;
@@ -15,6 +15,14 @@ function describeGoal(v: Villager): string {
       return "working on a blueprint";
     case "socialize_at":
       return "sitting by the fire";
+    case "fish":
+      return "fishing";
+    case "hunt":
+      return "out hunting";
+    case "tame":
+      return "wrangling a goat";
+    case "mine":
+      return "working the mine";
     case "talk_to":
       return "looking for someone to talk to";
     default:
@@ -52,6 +60,19 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
     : "No farms yet.";
 
   const homeless = alive.filter((x) => !x.homeId).length;
+  const wild = w.animals.filter((a) => a.alive && !a.tame);
+  const deer = wild.filter((a) => a.kind === "deer").length;
+  const goats = wild.filter((a) => a.kind === "goat").length;
+  const pen = structuresWithFunction(w, "livestock")[0];
+  const herd = pen ? w.animals.filter((a) => a.alive && a.penId === pen.id).length : 0;
+  const mineShaft = structuresWithFunction(w, "mining")[0];
+  const landParts = [
+    hasCoast(w) ? `Coast: yes (${structuresWithFunction(w, "fishing").length ? "dock built" : "no dock yet"}).` : "Coast: none.",
+    `Wild game about: ${deer} deer, ${goats} goats.`,
+    pen ? `Pen: ${herd} goat${herd === 1 ? "" : "s"}.` : "",
+    mineShaft ? (mineShaft.depleted ? "Mine: worked out." : `Mine: ${mineShaft.reserve?.stone ?? 0} stone and ${mineShaft.reserve?.ore ?? 0} ore left in the vein.`) : "",
+  ];
+  const landNote = landParts.filter(Boolean).join(" ");
   const nearby = alive
     .filter((o) => o.id !== v.id && distance(o.pos, v.pos) < 8)
     .slice(0, 6)
@@ -76,9 +97,7 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
   const openPetitions = w.petitions.filter((p) => p.status === "open");
   const openCount = openPetitions.length;
   const proposal = currentProposal(w);
-  const shortages = (Object.keys(PETITION_NEED_THRESHOLD) as (keyof typeof PETITION_NEED_THRESHOLD)[])
-    .filter((k) => s[k] < PETITION_NEED_THRESHOLD[k] && !openPetitions.some((p) => p.ask === k) && proposal?.ask !== k)
-    .map((k) => `${k} (${s[k]})`);
+  const shortages = proposal ? [] : askableNow(w).filter((a) => a !== "newcomer" && a !== "blessing");
   let shrineNote = "";
   if (proposal) {
     const mineAlready = proposal.supporters.includes(v.id);
@@ -87,7 +106,7 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
       (mineAlready ? " You are already among them." : " You may go and support it (action support) or stay away if you disagree.");
   }
   if (shortages.length) {
-    shrineNote += `${proposal ? "\n" : "\n## Shrine\n"}The village is short of ${shortages.join(", ")} and nobody has called a gathering about ${shortages.length > 1 ? "them" : "it"} yet.`;
+    shrineNote += `\n## Shrine\nThe village has been short of ${shortages.join(" and ")} for a while and the land offers no way to get more. Asking the provider is possible now, if you judge it right.`;
   }
 
   return `## You
@@ -101,9 +120,9 @@ Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}$
 
 ## The village
 ${alive.length} villagers: ${others}. ${homeless} without a home.
-Storehouse: ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds.
+Storehouse: ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds, ${s.ore} ore.
 Buildings: ${buildings || "only the camp"}. ${farmNote}
-Forest nearby: ${countResourceTiles(w, "forest") > 0 ? "yes" : "none left"}. Rock nearby: ${countResourceTiles(w, "rock") > 0 ? "yes" : "none left"}.
+Forest: ${countResourceTiles(w, "forest") > 0 ? "yes" : "none left"}. Rock to quarry: ${countResourceTiles(w, "rock") > 0 ? "yes" : "none left"}. ${landNote}
 Near you: ${nearby || "nobody"}.
 Open petitions at the shrine: ${openCount}. ${petitionLine}${shrineNote}
 

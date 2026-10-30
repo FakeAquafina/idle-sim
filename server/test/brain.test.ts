@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { PlanOutputSchema, type PlanOutput, type WorldState } from "@idle-sim/shared";
 import { planToGoal } from "../src/brain/apply.ts";
 import { costOf } from "../src/brain/budget.ts";
-import { canPetition, denyPetition, grantPetition, lapseStaleProposals, proposePetition, supportPetition, supportNeeded } from "../src/sim/petitions.ts";
+import { canPetition, denyPetition, grantPetition, lapseStaleProposals, proposePetition, supportPetition, supportNeeded, updateShortages } from "../src/sim/petitions.ts";
+import { TICKS_PER_DAY } from "@idle-sim/shared";
 import { seedVillagers } from "../src/sim/seed.ts";
 import { tickWorld } from "../src/sim/tick.ts";
 import type { Persona } from "../src/sim/villager.ts";
@@ -16,6 +17,23 @@ function world(): WorldState {
   seedVillagers(w, personas);
   for (let i = 0; i < 500; i++) tickWorld(w);
   return w;
+}
+
+/** Make a resource genuinely unobtainable and long-short so a petition is allowed. */
+function starve(w: WorldState, ...asks: ("wood" | "stone" | "food" | "seeds")[]) {
+  for (const a of asks) {
+    w.storehouse[a] = 0;
+    if (a === "wood") for (const t of w.tiles) if (t.kind === "forest") t.amount = 0;
+    if (a === "stone") for (const t of w.tiles) if (t.kind === "rock") t.amount = 0;
+    if (a === "food") {
+      w.coast = undefined;
+      w.animals = [];
+      for (const s of w.structures) if (s.kind === "farm") s.growth = undefined;
+    }
+    if (a === "seeds") for (const s of w.structures) if (s.kind === "farm") s.growth = undefined;
+  }
+  updateShortages(w);
+  w.clock.tick += TICKS_PER_DAY;
 }
 
 function plan(partial: Partial<PlanOutput>): PlanOutput {
@@ -79,14 +97,14 @@ describe("petitions", () => {
     const v = w.villagers[0];
     w.storehouse.wood = 100;
     expect(canPetition(w, v, { ask: "wood", amount: 10, reason: "r" })).toMatch(/enough wood/);
-    w.storehouse.wood = 5;
+    starve(w, "wood");
     expect(canPetition(w, v, { ask: "wood", amount: 10, reason: "r" })).toBeNull();
     expect(canPetition(w, v, { ask: "wood", amount: 500, reason: "r" })).toMatch(/between/);
   });
 
   it("needs half the village to gather before a petition opens", () => {
     const w = world();
-    w.storehouse.seeds = 0;
+    starve(w, "seeds", "wood");
     const [a, b, c, d] = w.villagers;
     expect(supportNeeded(w)).toBe(3); // 6 villagers
     const p = proposePetition(w, a, { ask: "seeds", amount: 5, reason: "bare fields" });
@@ -106,19 +124,19 @@ describe("petitions", () => {
 
   it("a proposal nobody joins lapses after a day", () => {
     const w = world();
-    w.storehouse.food = 0;
+    starve(w, "food");
     const a = w.villagers[0];
     const p = proposePetition(w, a, { ask: "food", amount: 10, reason: "hunger" });
     w.clock.tick = p.expiresTick;
     lapseStaleProposals(w);
     expect(p.status).toBe("lapsed");
     expect(a.memory.some((m) => m.includes("Nobody came"))).toBe(true);
-    expect(canPetition(w, a, { ask: "food", amount: 10, reason: "r" })).toBeNull(); // can try again
+    expect(canPetition(w, a, { ask: "food", amount: 10, reason: "r" })).toMatch(/asked recently/); // cooldown now
   });
 
   it("caps open petitions per villager, per resource, and village-wide", () => {
     const w = world();
-    w.storehouse = { wood: 0, stone: 0, food: 0, seeds: 0 };
+    starve(w, "wood", "stone", "food", "seeds");
     const [a, b, c, d, e, f] = w.villagers;
     const openWith = (proposer: typeof a, ask: "wood" | "stone" | "food" | "seeds") => {
       const p = proposePetition(w, proposer, { ask, amount: 5, reason: "r" });
@@ -130,13 +148,12 @@ describe("petitions", () => {
     expect(canPetition(w, b, { ask: "wood", amount: 10, reason: "r" })).toMatch(/already asked for wood/);
     openWith(b, "stone");
     openWith(c, "food");
-    expect(canPetition(w, d, { ask: "seeds", amount: 5, reason: "r" })).toMatch(/enough requests/);
+    expect(canPetition(w, d, { ask: "seeds", amount: 5, reason: "r" })).toMatch(/enough requests|asked recently/);
   });
 
   it("granting delivers resources and leaves memories for everyone who gathered", () => {
     const w = world();
-    w.storehouse.wood = 0;
-    w.storehouse.food = 0;
+    starve(w, "wood", "food");
     const [a, b, c, d] = w.villagers;
     const p1 = proposePetition(w, a, { ask: "wood", amount: 20, reason: "the roofs leak" });
     supportPetition(w, b, p1.id);
@@ -156,7 +173,7 @@ describe("petitions", () => {
 
   it("a petition goal walks to the shrine and calls the gathering; autopilot villagers join", () => {
     const w = world();
-    w.storehouse.seeds = 0;
+    starve(w, "seeds");
     const v = w.villagers[0];
     v.goal = { type: "petition", ask: "seeds", amount: 5, reason: "the fields lie bare" };
     v.goalStartedTick = w.clock.tick;

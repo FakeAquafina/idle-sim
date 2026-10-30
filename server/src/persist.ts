@@ -30,6 +30,9 @@ export function loadWorld(dir: string): WorldState | null {
     // Fields added after a save was written get sensible defaults.
     w.petitions ??= [];
     w.rumors ??= [];
+    w.animals ??= [];
+    w.shortageSince ??= {};
+    w.storehouse.ore ??= 0;
     for (const v of w.villagers) v.cooldowns ??= {};
     for (const p of w.petitions) {
       p.supporters ??= [p.villagerId];

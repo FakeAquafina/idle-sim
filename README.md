@@ -23,6 +23,20 @@ npm run dev                   # server on :3000, viewer on http://localhost:5173
 Open `http://localhost:5173/?token=YOUR_ADMIN_TOKEN` once to unlock the admin bar
 (pause, speed, reset). The token is remembered in that browser.
 
+## The land provides
+
+The world is meant to hold everything the village needs, if people work for it:
+
+- **Forests** give wood; **rock** gives stone by hand. A **mine** dug beside rock
+  strikes a vein of stone and sometimes **ore** (and runs dry eventually).
+- The **coast** (one edge of every map) gives fish from the beach, much faster
+  from a **dock**.
+- **Deer and goats** roam the wilds and flee from people. They can be hunted for
+  food, and goats can be led into a **pen**, where they give food over time and
+  breed.
+- A **workshop** costs ore and makes everyone work a quarter faster.
+- Every building is paid for from the storehouse, so houses need harvested wood.
+
 ## Claude-driven villagers
 
 With `ANTHROPIC_API_KEY` set in `server/.env`, each villager asks Claude
@@ -39,8 +53,11 @@ switch AI off entirely from the admin bar.
 ## Petitions, gifts, rumors
 
 You are the unseen provider, and you listen to the village rather than to one
-voice. When the village genuinely lacks something (wood, stone, food, seeds, a
-newcomer, or a blessing) a villager may walk to the shrine and call a gathering.
+voice. Petitions are rare by design: a shortage must have lasted half a sim day,
+the land must offer no way to fix it (no trees left, no rock and no working mine,
+no seeds and nothing growing; food is never askable while there is a coast or
+game), and at most one petition every two sim days. When all that holds, a
+villager may walk to the shrine and call a gathering.
 The request only reaches you once at least half the village (minimum two) has
 walked there to stand with them; a gathering nobody joins within a sim day
 breaks up. Open requests appear in the **Shrine petitions** panel, with

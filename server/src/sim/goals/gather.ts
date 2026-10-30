@@ -1,5 +1,5 @@
 import { CARRY_LIMIT, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
-import { adjacentToStructure, adjacentToTile, nearestResourceTile, setTile, structuresWithFunction, tileAt } from "../world.ts";
+import { adjacentToStructure, adjacentToTile, nearestResourceTile, setTile, structuresWithFunction, tileAt, workBonus } from "../world.ts";
 import { villagerTile } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
@@ -34,7 +34,8 @@ export function stepGather(w: WorldState, v: Villager, g: Extract<Goal, { type: 
       return "running";
     }
     g.collectTimer++;
-    if (g.collectTimer >= TICKS_PER_UNIT) {
+    const skilled = (g.resource === "wood" && v.skill === "woodcutter") || (g.resource === "stone" && v.skill === "mason");
+    if (g.collectTimer >= TICKS_PER_UNIT / workBonus(w) / (skilled ? 1.4 : 1)) {
       g.collectTimer = 0;
       tile.amount -= 1;
       v.inventory[g.resource] = carried + 1;

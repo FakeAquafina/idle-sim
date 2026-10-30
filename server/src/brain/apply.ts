@@ -10,7 +10,8 @@ import {
 } from "@idle-sim/shared";
 import { emitEvent } from "../sim/events.ts";
 import { canPetition, currentProposal } from "../sim/petitions.ts";
-import { canAfford, countResourceTiles, findPlacement, placeStructure, structuresWithFunction, villageCenter } from "../sim/world.ts";
+import { canAfford, countResourceTiles, distance, findPlacement, hasCoast, nearestWildAnimal, placeStructure, shoreTiles, structuresWithFunction, villageCenter } from "../sim/world.ts";
+import { villagerTile } from "../sim/villager.ts";
 
 export interface ApplyResult {
   goal: Goal | null;
@@ -53,6 +54,39 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
       return { goal: { type: "gather", resource: res, phase: "to_resource", collectTimer: 0 } };
     }
 
+    case "fish": {
+      if (v.stage === "child") return { goal: null, reason: "children don't fish alone" };
+      if (!hasCoast(w) || shoreTiles(w, villagerTile(v), 1).length === 0) return { goal: null, reason: "no shore to fish from" };
+      return { goal: { type: "fish", phase: "to_shore", timer: 0 } };
+    }
+
+    case "hunt": {
+      if (v.stage === "child") return { goal: null, reason: "children don't hunt" };
+      const kind = plan.target === "deer" || plan.target === "goat" ? plan.target : undefined;
+      const prey = nearestWildAnimal(w, v.pos, kind);
+      if (!prey) return { goal: null, reason: kind ? `no wild ${kind} about` : "no game about" };
+      if (distance(prey.pos, v.pos) > 30) return { goal: null, reason: "the game is too far off" };
+      return { goal: { type: "hunt", animalId: prey.id, phase: "chasing" } };
+    }
+
+    case "tame": {
+      if (v.stage === "child") return { goal: null, reason: "children don't wrangle goats" };
+      const pen = structuresWithFunction(w, "livestock")[0];
+      if (!pen) return { goal: null, reason: "no pen to keep animals in" };
+      const herd = w.animals.filter((a) => a.alive && a.penId === pen.id).length;
+      if (herd >= (STRUCTURES[pen.kind].capacity ?? 4)) return { goal: null, reason: "the pen is full" };
+      const goat = nearestWildAnimal(w, v.pos, "goat");
+      if (!goat) return { goal: null, reason: "no wild goats about" };
+      return { goal: { type: "tame", animalId: goat.id, penId: pen.id, phase: "approach" } };
+    }
+
+    case "mine": {
+      if (v.stage === "child") return { goal: null, reason: "children don't mine" };
+      const mine = structuresWithFunction(w, "mining").find((m) => !m.depleted);
+      if (!mine) return { goal: null, reason: structuresWithFunction(w, "mining").length ? "the mine is worked out" : "no mine yet" };
+      return { goal: { type: "mine", structureId: mine.id, phase: "to_mine", timer: 0 } };
+    }
+
     case "farm": {
       if (v.stage === "child") return { goal: null, reason: "children don't farm" };
       const farms = structuresWithFunction(w, "farm");
@@ -75,8 +109,18 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
       if (tooMany) return { goal: null, reason: tooMany };
       if (w.structures.filter((s) => !s.built).length >= 2) return { goal: null, reason: "two blueprints already waiting" };
       if (!canAfford(w, STRUCTURES[kind].cost)) return { goal: null, reason: `not enough materials for a ${kind}` };
-      const spot = findPlacement(w, kind, villageCenter(w));
-      if (!spot) return { goal: null, reason: "no room to build" };
+      let near = villageCenter(w);
+      let radius = 18;
+      if (STRUCTURES[kind].mustTouch === "water") {
+        const shore = shoreTiles(w, near, 1)[0];
+        if (!shore) return { goal: null, reason: "no shore to build on" };
+        near = shore;
+        radius = 10;
+      } else if (STRUCTURES[kind].mustTouch === "rock") {
+        radius = 40;
+      }
+      const spot = findPlacement(w, kind, near, radius);
+      if (!spot) return { goal: null, reason: "no suitable spot to build" };
       const s = placeStructure(w, kind, spot.x, spot.y);
       if (!s) return { goal: null, reason: "could not place the blueprint" };
       emitEvent(w, "blueprint", `${v.name} laid out a new ${STRUCTURES[kind].label.toLowerCase()}.`, { villagerIds: [v.id], pos: spot });
@@ -106,7 +150,9 @@ function tooManyOfKind(w: WorldState, kind: string): string | null {
   const count = w.structures.filter((s) => s.kind === kind).length;
   const alive = w.villagers.filter((v) => v.alive).length;
   const fn = STRUCTURES[kind].function;
-  if ((fn === "storage" || fn === "social" || fn === "petition") && count >= 1) return `the village already has a ${kind}`;
+  if ((fn === "storage" || fn === "social" || fn === "petition" || fn === "fishing" || fn === "livestock" || fn === "crafting") && count >= 1) return `the village already has a ${kind}`;
+  if (fn === "mining" && w.structures.some((s) => s.kind === kind && !s.depleted)) return "the current mine is not worked out yet";
+  if (fn === "fishing" && !hasCoast(w)) return "there is no coast here";
   if (fn === "water" && count >= 1 + Math.floor(w.structures.filter((s) => s.kind === "farm").length / 6)) return "one well is enough for now";
   if (fn === "shelter" && count * (STRUCTURES[kind].capacity ?? 2) >= alive + 2) return "there are already enough houses";
   if (fn === "farm" && count >= alive + 2) return "there are already plenty of farms";

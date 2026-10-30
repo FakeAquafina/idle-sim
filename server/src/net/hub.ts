@@ -88,6 +88,7 @@ export class Hub {
       storehouse: w.storehouse,
       villagers: w.villagers.map(stripPath),
       structures: w.structures,
+      animals: w.animals,
       tiles,
       petitions: w.petitions,
       rumors: w.rumors,

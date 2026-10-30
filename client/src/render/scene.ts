@@ -1,7 +1,7 @@
 // Draws the world from the mirrored state. Placeholder shapes for now.
 
 import { Container, Graphics, Text } from "pixi.js";
-import { STRUCTURES, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
+import { STRUCTURES, type Animal, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
 import { TILE, projection } from "./projection.ts";
 
@@ -9,10 +9,19 @@ const TILE_COLORS: Record<Tile["kind"], number> = {
   grass: 0x4f8a3b,
   dirt: 0x8a6a3b,
   water: 0x2f5f9e,
+  sand: 0xd6c587,
   forest: 0x2f6b2a,
   rock: 0x6f7378,
+  ore: 0x5c4f6e,
   farmland: 0x6e4b2a,
 };
+
+interface AnimalLook {
+  root: Container;
+  gfx: Graphics;
+  target: { x: number; y: number };
+  key: string;
+}
 
 interface StructureView {
   root: Container;
@@ -37,14 +46,16 @@ export class Scene {
   private tiles = new Graphics();
   private structureLayer = new Container();
   private villagerLayer = new Container();
+  private animalLayer = new Container();
   private structureViews = new Map<string, StructureView>();
   private villagerViews = new Map<string, VillagerLook>();
+  private animalViews = new Map<string, AnimalLook>();
   onVillagerClick: ((id: string) => void) | null = null;
   private shouldIgnoreClick: () => boolean = () => false;
 
   constructor() {
     this.villagerLayer.sortableChildren = true;
-    this.root.addChild(this.tiles, this.structureLayer, this.villagerLayer);
+    this.root.addChild(this.tiles, this.structureLayer, this.animalLayer, this.villagerLayer);
   }
 
   setClickGuard(fn: () => boolean) {
@@ -57,6 +68,8 @@ export class Scene {
     this.structureViews.clear();
     this.villagerLayer.removeChildren();
     this.villagerViews.clear();
+    this.animalLayer.removeChildren();
+    this.animalViews.clear();
     this.update(state, true);
   }
 
@@ -72,6 +85,13 @@ export class Scene {
           g.circle(p.x + TILE / 2, p.y + TILE / 2, 3 + Math.min(3, t.amount / 5)).fill(0x1f4d1c);
         } else if (t.kind === "rock") {
           g.rect(p.x + 4, p.y + 5, TILE - 8, TILE - 9).fill(0x9a9ea3);
+        } else if (t.kind === "ore") {
+          g.rect(p.x + 4, p.y + 5, TILE - 8, TILE - 9).fill(0x8d7fa6);
+          g.rect(p.x + 7, p.y + 7, 3, 3).fill(0xe6d27a);
+        } else if (t.kind === "water") {
+          if ((x * 7 + y * 13) % 5 === 0) g.rect(p.x + 3, p.y + 8, 6, 1).fill({ color: 0x6f9bd1, alpha: 0.7 });
+        } else if (t.kind === "sand") {
+          if ((x * 3 + y * 11) % 7 === 0) g.rect(p.x + 5, p.y + 6, 2, 2).fill(0xbfae72);
         }
       }
     }
@@ -80,6 +100,48 @@ export class Scene {
   update(state: MirrorState, snap = false): void {
     this.updateStructures(state.structures);
     this.updateVillagers(state.villagers, snap);
+    this.updateAnimals(state.animals ?? [], snap);
+  }
+
+  private updateAnimals(animals: Animal[], snap: boolean): void {
+    const seen = new Set<string>();
+    for (const a of animals) {
+      if (!a.alive) continue;
+      seen.add(a.id);
+      let look = this.animalViews.get(a.id);
+      if (!look) {
+        const root = new Container();
+        const gfx = new Graphics();
+        root.addChild(gfx);
+        this.animalLayer.addChild(root);
+        look = { root, gfx, target: { x: 0, y: 0 }, key: "" };
+        this.animalViews.set(a.id, look);
+        snap = true;
+      }
+      const p = projection.toScreen(a.pos.x, a.pos.y);
+      look.target = p;
+      if (snap) look.root.position.set(p.x, p.y);
+      const key = `${a.kind}|${a.tame}`;
+      if (look.key !== key) {
+        look.key = key;
+        const g = look.gfx;
+        g.clear();
+        if (a.kind === "deer") {
+          g.ellipse(0, 0, 5, 3.2).fill(0x8a5a2b).stroke({ color: 0x3a240f, width: 1 });
+          g.rect(3, -5, 1, 3).fill(0x3a240f);
+          g.rect(5, -5, 1, 3).fill(0x3a240f);
+        } else {
+          g.ellipse(0, 0, 4.2, 3).fill(a.tame ? 0xf3ecd8 : 0xd9cfb4).stroke({ color: 0x4a4030, width: 1 });
+          g.rect(-5, -2, 2, 2).fill(0x4a4030);
+        }
+      }
+    }
+    for (const [id, look] of this.animalViews) {
+      if (!seen.has(id)) {
+        look.root.destroy({ children: true });
+        this.animalViews.delete(id);
+      }
+    }
   }
 
   private updateStructures(structures: Structure[]): void {
@@ -130,6 +192,23 @@ export class Scene {
     } else {
       g.rect(0, 0, w, h).fill(def.color).stroke({ color: 0x000000, width: 1, alpha: 0.35 });
       if (s.kind === "house") g.poly([0, 0, w / 2, -5, w, 0]).fill(0x8b3a2a);
+      if (s.kind === "dock") {
+        g.clear();
+        g.rect(0, 2, w, h - 4).fill(0x9c7a4a).stroke({ color: 0x4a3418, width: 1 });
+        for (let i = 4; i < w; i += 6) g.rect(i, 1, 1, h - 2).fill(0x5a3f1e);
+      }
+      if (s.kind === "mine") {
+        g.rect(w / 2 - 5, h / 2 - 3, 10, 8).fill(0x1d1a22);
+        g.poly([w / 2 - 7, h / 2 - 3, w / 2, h / 2 - 8, w / 2 + 7, h / 2 - 3]).fill(0x6b5a3a);
+        if (s.depleted) g.rect(w / 2 - 6, h / 2 - 1, 12, 2).fill(0x8a7a5a);
+      }
+      if (s.kind === "pen") {
+        g.clear();
+        g.rect(0, 0, w, h).fill(0x6b8a3b);
+        g.rect(0, 0, w, h).stroke({ color: 0x8a6a3b, width: 2 });
+        for (let i = 6; i < w; i += 8) g.rect(i, -1, 1, 3).fill(0x5a3f1e).rect(i, h - 2, 1, 3).fill(0x5a3f1e);
+      }
+      if (s.kind === "workshop") g.rect(w / 2 - 2, -4, 4, 5).fill(0x3a3a3a);
       if (s.kind === "campfire") g.circle(w / 2, h / 2, 4).fill(0xffd166);
       if (s.kind === "shrine") g.circle(w / 2, h / 2, 3).fill(0xffffff);
       if (s.kind === "well") g.circle(w / 2, h / 2, 4).fill(0x1d3b5c);

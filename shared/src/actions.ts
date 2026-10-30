@@ -4,7 +4,7 @@
 
 import { z } from "zod/v4";
 
-export const PLAN_ACTIONS = ["build", "farm", "gather", "talk_to", "rest", "eat", "wander", "socialize", "petition", "support"] as const;
+export const PLAN_ACTIONS = ["build", "farm", "gather", "fish", "hunt", "tame", "mine", "talk_to", "rest", "eat", "wander", "socialize", "petition", "support"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 
 export const PETITION_ASKS = ["wood", "stone", "food", "seeds", "newcomer", "blessing"] as const;
@@ -23,7 +23,7 @@ export const PlanOutputSchema = z.object({
   target: z
     .string()
     .nullable()
-    .describe("build: a building kind. gather: wood or stone. talk_to: a villager's name. Otherwise null."),
+    .describe("build: a building kind. gather: wood or stone. hunt: deer or goat (or null for whichever is nearest). talk_to: a villager's name. Otherwise null."),
   petition: PetitionRequestSchema.nullable().describe("Only when action is petition (proposing a gathering at the shrine)."),
   memory_note: z.string().nullable().describe("A short note worth remembering, or null."),
 });
@@ -69,10 +69,14 @@ export const MIN_SUPPORTERS = 2;
 /** Sim days a proposal waits for support before lapsing. */
 export const PROPOSAL_DAYS = 1;
 
-/** Stock below which a villager may reasonably ask the provider for a resource. */
+/** Stock below which a resource counts as short. Petitions need more than this: see petitions.ts. */
 export const PETITION_NEED_THRESHOLD: Record<"wood" | "stone" | "food" | "seeds", number> = {
-  wood: 25,
-  stone: 10,
-  food: 15,
-  seeds: 2,
+  wood: 10,
+  stone: 5,
+  food: 8,
+  seeds: 1,
 };
+/** A shortage must last this many sim days before anyone may call a gathering. */
+export const SHORTAGE_DAYS_BEFORE_PETITION = 0.5;
+/** Sim days between petitions (counted from the last one opening or lapsing). */
+export const PETITION_COOLDOWN_DAYS = 2;

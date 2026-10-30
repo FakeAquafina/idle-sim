@@ -52,6 +52,10 @@ function describeGoal(v: VillagerView): string {
     case "talk_to": return "looking for a chat";
     case "socialize_at": return "warming up by the fire";
     case "petition": return "calling a gathering at the shrine";
+    case "fish": return g.phase === "to_storehouse" ? "bringing fish home" : "fishing";
+    case "hunt": return g.phase === "chasing" ? "hunting" : "bringing meat home";
+    case "tame": return g.phase === "approach" ? "sneaking up on a goat" : "leading a goat to the pen";
+    case "mine": return g.phase === "to_storehouse" ? "hauling from the mine" : "working the mine";
     case "support": return "going to stand at the shrine";
   }
 }

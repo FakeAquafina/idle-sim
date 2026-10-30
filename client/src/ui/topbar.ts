@@ -12,7 +12,7 @@ export function updateTopbar(state: MirrorState): void {
   $("weather").textContent = { clear: "☀ clear", rain: "🌧 rain", storm: "⛈ storm", snow: "❄ snow" }[c.weather];
   $("speed").textContent = state.paused ? "⏸ paused" : `${state.speed}x`;
   const s = state.storehouse;
-  $("stock").textContent = `🪵${s.wood} 🪨${s.stone} 🍞${s.food} 🌱${s.seeds}`;
+  $("stock").textContent = `🪵${s.wood} 🪨${s.stone} 🍞${s.food} 🌱${s.seeds}${s.ore ? ` ⛏${s.ore}` : ""}`;
 }
 
 export function updateViewers(count: number): void {

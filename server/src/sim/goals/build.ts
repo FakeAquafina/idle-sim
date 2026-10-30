@@ -1,6 +1,6 @@
 import { STRUCTURES, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
-import { adjacentToStructure, assignHomes, onStructureBuilt } from "../world.ts";
+import { adjacentToStructure, assignHomes, onStructureBuilt, workBonus } from "../world.ts";
 import { remember } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
@@ -14,7 +14,7 @@ export function stepBuild(w: WorldState, v: Villager, g: Extract<Goal, { type: "
   if (w.clock.weather === "storm") return "running"; // wait it out
 
   const skillBonus = v.skill === "builder" ? 1.5 : 1;
-  s.progress = Math.min(1, s.progress + skillBonus / def.buildTicks);
+  s.progress = Math.min(1, s.progress + (skillBonus * workBonus(w)) / def.buildTicks);
   if (s.progress >= 1) {
     onStructureBuilt(w, s);
     emitEvent(w, "built", `${v.name} finished building a ${def.label.toLowerCase()}.`, {

@@ -2,8 +2,8 @@
 
 import type { Petition, Rumor } from "./actions.ts";
 
-export type TileKind = "grass" | "dirt" | "water" | "forest" | "rock" | "farmland";
-export type ResourceKind = "wood" | "stone" | "food" | "seeds";
+export type TileKind = "grass" | "dirt" | "water" | "sand" | "forest" | "rock" | "ore" | "farmland";
+export type ResourceKind = "wood" | "stone" | "food" | "seeds" | "ore";
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Weather = "clear" | "rain" | "storm" | "snow";
 export type LifeStage = "child" | "adult" | "elder";
@@ -15,8 +15,25 @@ export interface Vec2 {
 
 export interface Tile {
   kind: TileKind;
-  /** Remaining wood (forest) or stone (rock). 0 for other tiles. */
+  /** Remaining wood (forest), stone (rock) or ore (ore vein). 0 for other tiles. */
   amount: number;
+}
+
+export type AnimalKind = "deer" | "goat";
+
+export interface Animal {
+  id: string;
+  kind: AnimalKind;
+  pos: Vec2;
+  target?: Vec2;
+  /** Ticks until the animal picks a new place to wander to. */
+  idleTicks: number;
+  tame: boolean;
+  /** Pen it lives in, once domesticated. */
+  penId?: string;
+  /** Villager currently leading it to a pen. */
+  leaderId?: string;
+  alive: boolean;
 }
 
 export type Inventory = Partial<Record<ResourceKind, number>>;
@@ -37,6 +54,10 @@ export interface Structure {
   ownerIds: string[];
   /** Farms only: crop growth 0..1. undefined = nothing planted. */
   growth?: number;
+  /** Mines only: what is left in the vein. */
+  reserve?: { stone: number; ore: number };
+  /** Mines only: true once the vein has run dry. */
+  depleted?: boolean;
 }
 
 export interface Needs {
@@ -56,7 +77,11 @@ export type GoalType =
   | "talk_to"
   | "socialize_at"
   | "petition"
-  | "support";
+  | "support"
+  | "fish"
+  | "hunt"
+  | "tame"
+  | "mine";
 
 export type Goal =
   | { type: "wander"; target: Vec2 }
@@ -74,7 +99,11 @@ export type Goal =
   | { type: "talk_to"; villagerId: string; chatted: boolean }
   | { type: "socialize_at"; structureId: string; untilTick: number }
   | { type: "petition"; ask: string; amount?: number; reason: string }
-  | { type: "support"; petitionId: string };
+  | { type: "support"; petitionId: string }
+  | { type: "fish"; target?: Vec2; phase: "to_shore" | "fishing" | "to_storehouse"; timer: number }
+  | { type: "hunt"; animalId: string; phase: "chasing" | "to_storehouse" }
+  | { type: "tame"; animalId: string; penId: string; phase: "approach" | "leading" }
+  | { type: "mine"; structureId: string; phase: "to_mine" | "digging" | "to_storehouse"; timer: number };
 
 export interface Speech {
   text: string;
@@ -140,7 +169,12 @@ export interface WorldState {
   tiles: Tile[];
   structures: Structure[];
   villagers: Villager[];
+  animals: Animal[];
   storehouse: Record<ResourceKind, number>;
+  /** Tick at which each resource first dropped below its petition threshold (absent = not short). */
+  shortageSince: Partial<Record<ResourceKind, number>>;
+  /** Which map edge is sea, if any. */
+  coast?: "north" | "south" | "east" | "west";
   clock: Clock;
   /** Most recent events (capped). Full history lives in events.jsonl on the server. */
   events: WorldEvent[];

@@ -9,6 +9,10 @@ import { stepSocializeAt } from "./socialize.ts";
 import { stepTalkTo } from "./talk.ts";
 import { stepPetition } from "./petition.ts";
 import { stepSupport } from "./support.ts";
+import { stepFish } from "./fish.ts";
+import { stepHunt } from "./hunt.ts";
+import { stepMine } from "./mine.ts";
+import { stepTame } from "./tame.ts";
 import { stepWander } from "./wander.ts";
 
 export type { StepResult } from "./helpers.ts";
@@ -38,5 +42,13 @@ export function stepGoal(w: WorldState, v: Villager): StepResult {
       return stepPetition(w, v, g);
     case "support":
       return stepSupport(w, v, g);
+    case "fish":
+      return stepFish(w, v, g);
+    case "hunt":
+      return stepHunt(w, v, g);
+    case "tame":
+      return stepTame(w, v, g);
+    case "mine":
+      return stepMine(w, v, g);
   }
 }

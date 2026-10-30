@@ -4,8 +4,10 @@ import {
   MAX_OPEN_PETITIONS,
   MAX_OPEN_PER_VILLAGER,
   MIN_SUPPORTERS,
+  PETITION_COOLDOWN_DAYS,
   PETITION_NEED_THRESHOLD,
   PROPOSAL_DAYS,
+  SHORTAGE_DAYS_BEFORE_PETITION,
   type Petition,
   type PetitionAsk,
   type PetitionRequest,
@@ -14,7 +16,7 @@ import {
 } from "@idle-sim/shared";
 import { emitEvent } from "./events.ts";
 import { createVillager, remember, say, type Persona } from "./villager.ts";
-import { assignHomes, distance, isWalkable, structuresWithFunction, villageCenter } from "./world.ts";
+import { assignHomes, countResourceTiles, distance, hasCoast, isWalkable, structuresWithFunction, villageCenter } from "./world.ts";
 import { randInt } from "./rng.ts";
 
 const RESOURCE_ASKS = ["wood", "stone", "food", "seeds"] as const;
@@ -24,31 +26,96 @@ function isResourceAsk(a: PetitionAsk): a is ResourceAsk {
   return (RESOURCE_ASKS as readonly string[]).includes(a);
 }
 
-/** Is the village actually short of this? Used by autopilot and validation alike. */
+/** Is the village actually short of this right now? Used by autopilot and validation alike. */
 export function villageLacks(w: WorldState, ask: PetitionAsk): boolean {
   if (isResourceAsk(ask)) return w.storehouse[ask] < PETITION_NEED_THRESHOLD[ask];
   if (ask === "newcomer") {
     const beds = structuresWithFunction(w, "shelter").reduce((n, h) => n + (2 - h.ownerIds.length), 0);
-    return beds > 0;
+    return beds > 0 && w.villagers.filter((v) => v.alive).length < 5;
   }
-  return true; // a blessing can always be hoped for
+  return w.clock.season === "winter" || w.clock.weather === "storm"; // a blessing is for hard times
+}
+
+/** Track how long each resource has been short. Call once per tick. */
+export function updateShortages(w: WorldState): void {
+  for (const k of RESOURCE_ASKS) {
+    if (w.storehouse[k] < PETITION_NEED_THRESHOLD[k]) w.shortageSince[k] ??= w.clock.tick;
+    else delete w.shortageSince[k];
+  }
+}
+
+/**
+ * The land is supposed to provide. A resource may only be asked for when the
+ * village has been short for a while AND has no way left to get it itself.
+ */
+export function landCannotProvide(w: WorldState, ask: ResourceAsk): string | null {
+  switch (ask) {
+    case "wood":
+      return countResourceTiles(w, "forest") > 0 ? "there are still trees to cut" : null;
+    case "stone": {
+      const mine = structuresWithFunction(w, "mining").some((m) => !m.depleted && (m.reserve?.stone ?? 0) > 0);
+      if (mine) return "the mine still has stone in it";
+      return countResourceTiles(w, "rock") > 0 ? "there is still rock to quarry" : null;
+    }
+    case "food": {
+      if (hasCoast(w)) return "the sea is full of fish";
+      if (w.animals.some((a) => a.alive && !a.tame)) return "there is game to hunt";
+      if (structuresWithFunction(w, "farm").some((f) => f.growth !== undefined)) return "crops are still growing";
+      return null;
+    }
+    case "seeds":
+      if (structuresWithFunction(w, "farm").some((f) => f.growth !== undefined)) return "a growing farm will yield seeds at harvest";
+      return null;
+  }
+}
+
+/** Ticks since the last petition opened or lapsed; petitions are rare by design. */
+function petitionCooldownLeft(w: WorldState): number {
+  let last = -Infinity;
+  for (const p of w.petitions) {
+    const t = p.status === "proposed" ? -Infinity : (p.resolvedTick ?? p.tick);
+    if (t > last) last = t;
+    if (p.status === "open" && p.tick > last) last = p.tick;
+  }
+  const cooldown = PETITION_COOLDOWN_DAYS * w.clock.ticksPerDay;
+  return Math.max(0, last + cooldown - w.clock.tick);
+}
+
+/** Why the village as a whole may not ask for this right now, or null if it may. */
+export function villageMayAsk(w: WorldState, ask: PetitionAsk): string | null {
+  const pending = w.petitions.filter((p) => p.status === "open" || p.status === "proposed");
+  if (pending.some((p) => p.status === "proposed")) return "a gathering is already being called at the shrine; support it or wait";
+  if (pending.length >= MAX_OPEN_PETITIONS) return "the shrine already has enough requests waiting";
+  const same = pending.find((p) => p.ask === ask);
+  if (same) return `${same.villagerName} has already asked for ${ask}`;
+  const cooldownTicks = petitionCooldownLeft(w);
+  if (cooldownTicks > 0) return `the provider was asked recently; wait ${Math.ceil(cooldownTicks / w.clock.ticksPerDay)} more day(s)`;
+  if (isResourceAsk(ask)) {
+    if (!villageLacks(w, ask)) return `the village still has enough ${ask}`;
+    const since = w.shortageSince[ask];
+    const lasted = since === undefined ? 0 : w.clock.tick - since;
+    if (lasted < SHORTAGE_DAYS_BEFORE_PETITION * w.clock.ticksPerDay) return `the ${ask} shortage is too recent; try to fix it first`;
+    const why = landCannotProvide(w, ask);
+    if (why) return why;
+  } else if (!villageLacks(w, ask)) {
+    return ask === "newcomer" ? "there is no room or need for a newcomer" : "these are not hard times";
+  }
+  return null;
+}
+
+/** Asks the village could legitimately make right now (for the prompt's shrine hint). */
+export function askableNow(w: WorldState): PetitionAsk[] {
+  return (["wood", "stone", "food", "seeds", "newcomer", "blessing"] as PetitionAsk[]).filter((a) => villageMayAsk(w, a) === null);
 }
 
 /** Returns a reason the petition is not allowed, or null if it is fine. */
 export function canPetition(w: WorldState, v: Villager, req: PetitionRequest): string | null {
   if (structuresWithFunction(w, "petition").length === 0) return "there is no shrine";
   const pending = w.petitions.filter((p) => p.status === "open" || p.status === "proposed");
-  if (pending.some((p) => p.status === "proposed")) return "a gathering is already being called at the shrine; support it or wait";
-  if (pending.length >= MAX_OPEN_PETITIONS) return "the shrine already has enough requests waiting";
   if (pending.filter((p) => p.villagerId === v.id).length >= MAX_OPEN_PER_VILLAGER) return "you already have a request waiting";
-  const same = pending.find((p) => p.ask === req.ask);
-  if (same) return `${same.villagerName} has already asked for ${req.ask}`;
-  if (isResourceAsk(req.ask)) {
-    if (!villageLacks(w, req.ask)) return `the village still has enough ${req.ask}`;
-    if (req.amount !== null && (req.amount < 1 || req.amount > 30)) return "ask for between 1 and 30 units";
-  } else if (req.ask === "newcomer" && !villageLacks(w, "newcomer")) {
-    return "there is no spare bed for a newcomer";
-  }
+  const village = villageMayAsk(w, req.ask);
+  if (village) return village;
+  if (isResourceAsk(req.ask) && req.amount !== null && (req.amount < 1 || req.amount > 30)) return "ask for between 1 and 30 units";
   return null;
 }
 
