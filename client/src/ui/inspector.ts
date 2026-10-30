@@ -27,7 +27,8 @@ export function renderInspector(state: MirrorState): void {
     <div class="row muted">${v.stage}, ${Math.floor(v.ageDays / DAYS_PER_YEAR)} years · ${esc(v.skill)}</div>
     <div class="row">${v.traits.map(esc).join(", ")}. ${esc(cap(v.quirk))}.</div>
     ${bar("hunger", v.needs.hunger)}${bar("energy", v.needs.energy)}${bar("social", v.needs.social)}${bar("warmth", v.needs.warmth)}
-    <div class="row"><b>Doing:</b> ${esc(describeGoal(v))} <span class="muted">(${v.source})</span></div>
+    <div class="row"><b>Doing:</b> ${esc(describeGoal(v))} <span class="muted">(${v.source === "ai" ? "Claude" : "autopilot"})</span></div>
+    ${v.lastThought ? `<div class="row"><b>Thinking:</b> <span class="muted">${esc(v.lastThought)}</span></div>` : ""}
     <div class="row"><b>Carrying:</b> ${Object.entries(v.inventory).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing"}</div>
     <div class="row"><b>Home:</b> ${v.homeId ? "yes" : "none"}</div>
     <div class="row"><b>Memories:</b><ul>${v.memory.slice(-8).map((m) => `<li>${esc(m)}</li>`).join("") || "<li>none yet</li>"}</ul></div>

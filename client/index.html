@@ -9,6 +9,7 @@
   <body>
     <div id="game"></div>
 
+    <div id="hud">
     <div id="topbar" class="panel">
       <span id="status" class="dot connecting" title="connection"></span>
       <span id="clock">--:--</span>
@@ -16,6 +17,7 @@
       <span id="weather">clear</span>
       <span id="speed" class="muted">1x</span>
       <span id="stock" class="muted"></span>
+      <span id="ai" class="muted" title="Claude spend this hour / cap">🧠 –</span>
       <span id="viewers" class="muted" title="viewers">👁 0</span>
     </div>
 
@@ -29,7 +31,18 @@
       <button data-speed="100">100x</button>
       <span class="sep"></span>
       <button data-cmd="reset" class="danger">Reset world</button>
+      <span class="sep"></span>
+      <button id="giftBtn" title="Drop resources at the storehouse">Gift…</button>
+      <button id="rumorBtn" title="Whisper a rumor villagers will gossip about">Whisper…</button>
+      <button id="aiBtn" title="Toggle Claude-driven villagers">AI: on</button>
+      <button id="budgetBtn" title="Hourly spend cap">$/h</button>
       <span id="adminMsg" class="muted"></span>
+    </div>
+    </div>
+
+    <div id="inbox" class="panel">
+      <div class="inbox-title">Shrine petitions <span id="inboxCount" class="muted"></span></div>
+      <div id="inboxList"></div>
     </div>
 
     <div id="feed" class="panel"></div>

@@ -1,0 +1,8 @@
+[
+  { "name": "Ilse", "traits": ["quiet", "sharp-eyed"], "quirk": "whittles small birds from offcuts", "skill": "woodcutter", "ageYears": 31 },
+  { "name": "Bram", "traits": ["loud", "generous"], "quirk": "tells the same three jokes", "skill": "builder", "ageYears": 38 },
+  { "name": "Sunniva", "traits": ["patient", "stubborn"], "quirk": "talks to seedlings", "skill": "farmer", "ageYears": 26 },
+  { "name": "Dag", "traits": ["gloomy", "loyal"], "quirk": "predicts rain from his knee", "skill": "mason", "ageYears": 47 },
+  { "name": "Rosalind", "traits": ["bold", "nosy"], "quirk": "knows everyone's business within a day", "skill": "forager", "ageYears": 23 },
+  { "name": "Edric", "traits": ["gentle", "forgetful"], "quirk": "leaves little piles of stones as markers", "skill": "cook", "ageYears": 52 }
+]

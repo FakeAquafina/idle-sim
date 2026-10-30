@@ -1,3 +1,4 @@
+import type { AiStatus } from "@idle-sim/shared";
 import type { MirrorState, ConnectionStatus } from "../net.ts";
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -22,4 +23,20 @@ export function updateStatus(status: ConnectionStatus): void {
   const el = $("status");
   el.className = `dot ${status}`;
   el.title = status;
+}
+
+export function updateAi(ai: AiStatus | null): void {
+  const el = $("ai");
+  if (!ai) return;
+  if (!ai.keyPresent) {
+    el.textContent = "🧠 no key";
+    el.title = "No ANTHROPIC_API_KEY on the server: villagers run on autopilot";
+  } else if (!ai.enabled) {
+    el.textContent = "🧠 off";
+    el.title = "AI disabled by admin";
+  } else {
+    el.textContent = `🧠 $${ai.spentHourUsd.toFixed(3)}/${ai.capUsd.toFixed(2)}${ai.inflight ? " …" : ""}`;
+    el.title = `${ai.callsHour} Claude calls this hour${ai.lastError ? `\nlast error: ${ai.lastError}` : ""}`;
+  }
+  el.classList.toggle("warn", !!ai.lastError && ai.keyPresent && ai.enabled);
 }

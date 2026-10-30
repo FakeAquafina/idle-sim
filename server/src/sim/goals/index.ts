@@ -7,6 +7,7 @@ import type { StepResult } from "./helpers.ts";
 import { stepRest } from "./rest.ts";
 import { stepSocializeAt } from "./socialize.ts";
 import { stepTalkTo } from "./talk.ts";
+import { stepPetition } from "./petition.ts";
 import { stepWander } from "./wander.ts";
 
 export type { StepResult } from "./helpers.ts";
@@ -33,6 +34,6 @@ export function stepGoal(w: WorldState, v: Villager): StepResult {
     case "talk_to":
       return stepTalkTo(w, v, g);
     case "petition":
-      return "done"; // Phase 2
+      return stepPetition(w, v, g);
   }
 }

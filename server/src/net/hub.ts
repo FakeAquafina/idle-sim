@@ -1,8 +1,18 @@
 // Tracks connected viewers and pushes world updates to them.
 
 import type { WebSocket } from "ws";
-import type { ClientMessage, DeltaMessage, ServerMessage, SnapshotMessage, VillagerView, WorldEvent, WorldState } from "@idle-sim/shared";
-import { runAdminCommand, tokenMatches } from "./admin.ts";
+import type {
+  AiStatus,
+  ClientMessage,
+  DeltaMessage,
+  ServerMessage,
+  Settings,
+  SnapshotMessage,
+  VillagerView,
+  WorldEvent,
+  WorldState,
+} from "@idle-sim/shared";
+import { runAdminCommand, tokenMatches, type AdminContext } from "./admin.ts";
 
 interface Client {
   socket: WebSocket;
@@ -11,14 +21,18 @@ interface Client {
 
 export const MAX_VIEWERS = 25;
 
+export interface HubDeps {
+  getWorld: () => WorldState;
+  getSettings: () => Settings;
+  getAi: () => AiStatus;
+  adminToken: string;
+  adminContext: () => AdminContext;
+}
+
 export class Hub {
   private clients = new Set<Client>();
 
-  constructor(
-    private getWorld: () => WorldState,
-    private adminToken: string,
-    private resetWorld: () => void,
-  ) {}
+  constructor(private deps: HubDeps) {}
 
   get viewerCount(): number {
     return this.clients.size;
@@ -29,7 +43,7 @@ export class Hub {
       socket.close(1013, "Too many viewers");
       return;
     }
-    const client: Client = { socket, isAdmin: tokenMatches(token, this.adminToken) };
+    const client: Client = { socket, isAdmin: tokenMatches(token, this.deps.adminToken) };
     this.clients.add(client);
     socket.on("message", (raw) => this.onMessage(client, raw.toString()));
     socket.on("close", () => {
@@ -42,9 +56,16 @@ export class Hub {
   }
 
   snapshot(isAdmin: boolean): SnapshotMessage {
-    const w = this.getWorld();
+    const w = this.deps.getWorld();
     const { villagers, dirtyTiles: _d, rngState: _r, ...rest } = w;
-    return { type: "snapshot", state: { ...rest, villagers: villagers.map(stripPath) }, viewers: this.clients.size, isAdmin };
+    return {
+      type: "snapshot",
+      state: { ...rest, villagers: villagers.map(stripPath) },
+      viewers: this.clients.size,
+      isAdmin,
+      settings: this.deps.getSettings(),
+      ai: this.deps.getAi(),
+    };
   }
 
   broadcastSnapshot(): void {
@@ -52,11 +73,11 @@ export class Hub {
   }
 
   broadcastDelta(): void {
+    const w = this.deps.getWorld();
     if (this.clients.size === 0) {
-      this.getWorld().dirtyTiles = [];
+      w.dirtyTiles = [];
       return;
     }
-    const w = this.getWorld();
     const tiles = [...new Set(w.dirtyTiles)].map((i) => ({ i, tile: w.tiles[i] }));
     w.dirtyTiles = [];
     const msg: DeltaMessage = {
@@ -68,6 +89,10 @@ export class Hub {
       villagers: w.villagers.map(stripPath),
       structures: w.structures,
       tiles,
+      petitions: w.petitions,
+      rumors: w.rumors,
+      settings: this.deps.getSettings(),
+      ai: this.deps.getAi(),
     };
     this.broadcast(msg);
   }
@@ -84,11 +109,11 @@ export class Hub {
       return;
     }
     if (msg.type !== "admin") return;
-    if (!tokenMatches(msg.token, this.adminToken)) {
+    if (!tokenMatches(msg.token, this.deps.adminToken)) {
       this.send(client, { type: "adminResult", ok: false, message: "Bad admin token" });
       return;
     }
-    const result = runAdminCommand(msg.command, { world: this.getWorld(), reset: this.resetWorld });
+    const result = runAdminCommand(msg.command, this.deps.adminContext());
     this.send(client, { type: "adminResult", ...result });
     if (msg.command.cmd === "reset") this.broadcastSnapshot();
     else this.broadcastDelta();

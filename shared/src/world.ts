@@ -1,5 +1,7 @@
 // Core world types shared by server (simulation) and client (rendering).
 
+import type { Petition, Rumor } from "./actions.ts";
+
 export type TileKind = "grass" | "dirt" | "water" | "forest" | "rock" | "farmland";
 export type ResourceKind = "wood" | "stone" | "food" | "seeds";
 export type Season = "spring" | "summer" | "autumn" | "winter";
@@ -103,6 +105,8 @@ export interface Villager {
   homeId?: string;
   /** Who chose the current goal. */
   source: "ai" | "autopilot";
+  /** Claude's latest private reasoning (shown in the inspector). */
+  lastThought?: string;
 }
 
 export interface Clock {
@@ -144,6 +148,28 @@ export interface WorldState {
   speed: number;
   /** Tile indices changed since the last network broadcast. Not meaningful in saves. */
   dirtyTiles: number[];
+  /** Requests villagers have made to the provider. */
+  petitions: Petition[];
+  /** Whispers from the provider that villagers gossip about for a while. */
+  rumors: Rumor[];
+}
+
+/** Server-side settings the admin can change at runtime. */
+export interface Settings {
+  aiEnabled: boolean;
+  /** Hard cap on Claude spend, in US dollars per rolling hour. */
+  budgetUsdPerHour: number;
+}
+
+/** AI status shared with viewers. */
+export interface AiStatus {
+  enabled: boolean;
+  keyPresent: boolean;
+  spentHourUsd: number;
+  capUsd: number;
+  callsHour: number;
+  inflight: number;
+  lastError?: string;
 }
 
 // ---- Time constants -------------------------------------------------------

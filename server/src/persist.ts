@@ -27,6 +27,10 @@ export function loadWorld(dir: string): WorldState | null {
       return null;
     }
     w.dirtyTiles = [];
+    // Fields added after a save was written get sensible defaults.
+    w.petitions ??= [];
+    w.rumors ??= [];
+    for (const v of w.villagers) v.cooldowns ??= {};
     return w;
   } catch (err) {
     console.warn("[persist] could not read world.json:", err);

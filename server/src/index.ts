@@ -8,26 +8,36 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import { TICKS_PER_SECOND, type WorldState } from "@idle-sim/shared";
-import { onEvent } from "./sim/events.ts";
-import { seedVillagers } from "./sim/seed.ts";
-import { tickWorld } from "./sim/tick.ts";
-import type { Persona } from "./sim/villager.ts";
-import { createWorld } from "./sim/world.ts";
-import { Hub } from "./net/hub.ts";
-import { appendEventLog, loadWorld, saveWorld } from "./persist.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_ROOT = path.resolve(here, "..");
 const DATA_DIR = path.join(SERVER_ROOT, "data");
 const CLIENT_DIST = path.resolve(SERVER_ROOT, "..", "client", "dist");
 
+// Load .env before importing anything that reads process.env at module load.
 dotenv.config({ path: path.join(SERVER_ROOT, ".env") });
+
+const { onEvent } = await import("./sim/events.ts");
+const { seedVillagers } = await import("./sim/seed.ts");
+const { tickWorld } = await import("./sim/tick.ts");
+const { createWorld } = await import("./sim/world.ts");
+const { Hub } = await import("./net/hub.ts");
+const { appendEventLog, loadWorld, saveWorld } = await import("./persist.ts");
+const { loadSettings, saveSettings } = await import("./settings.ts");
+const { Notifier } = await import("./notify.ts");
+const { makeClient } = await import("./brain/claude.ts");
+const { Budget } = await import("./brain/budget.ts");
+const { Scheduler } = await import("./brain/scheduler.ts");
+const { buildSystemPrompt } = await import("./brain/prompts/system.ts");
+type Persona = import("./sim/villager.ts").Persona;
+
 // SIM_PORT rather than PORT: dev tools often set PORT for the Vite front end.
 const PORT = Number(process.env.SIM_PORT ?? 3000);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 if (!ADMIN_TOKEN) console.warn("[server] ADMIN_TOKEN is not set: admin commands are disabled.");
 
 const personas = JSON.parse(readFileSync(path.join(DATA_DIR, "villagers.json"), "utf8")) as Persona[];
+const newcomerPool = JSON.parse(readFileSync(path.join(DATA_DIR, "newcomers.json"), "utf8")) as Persona[];
 
 function newWorld(): WorldState {
   const w = createWorld((Date.now() % 2147483647) | 0);
@@ -36,21 +46,42 @@ function newWorld(): WorldState {
 }
 
 let world = loadWorld(DATA_DIR) ?? newWorld();
+const settings = loadSettings(DATA_DIR);
 console.log(`[server] world loaded: seed ${world.seed}, tick ${world.clock.tick}, ${world.villagers.length} villagers`);
 
-const hub = new Hub(
-  () => world,
-  ADMIN_TOKEN,
-  () => {
-    world = newWorld();
-    saveWorld(DATA_DIR, world);
-    console.log("[server] world reset");
-  },
-);
+// ---- AI, notifications ---------------------------------------------------------
+const client = makeClient();
+const budget = new Budget();
+const scheduler = new Scheduler({ getWorld: () => world, client, budget, getSettings: () => settings, systemPrompt: buildSystemPrompt() });
+console.log(client ? `[brain] Claude enabled (cap $${settings.budgetUsdPerHour}/hour)` : "[brain] no ANTHROPIC_API_KEY: villagers run on autopilot");
 
+const notifier = new Notifier(process.env.NTFY_URL, process.env.DISCORD_WEBHOOK);
+console.log(notifier.enabled ? "[notify] notifications on" : "[notify] no NTFY_URL / DISCORD_WEBHOOK: notifications off");
+
+const hub = new Hub({
+  getWorld: () => world,
+  getSettings: () => settings,
+  getAi: () => scheduler.status(),
+  adminToken: ADMIN_TOKEN,
+  adminContext: () => ({
+    world,
+    settings,
+    reset: () => {
+      world = newWorld();
+      saveWorld(DATA_DIR, world);
+      console.log("[server] world reset");
+    },
+    saveSettings: () => saveSettings(DATA_DIR, settings),
+    pickNewcomer: () => newcomerPool.find((p) => !world.villagers.some((v) => v.name === p.name)) ?? null,
+    poke: (id) => scheduler.poke(id),
+  }),
+});
+
+const NOTIFY_KINDS = new Set(["petition", "arrival", "season", "built"]);
 onEvent((e) => {
   hub.broadcastEvent(e);
   appendEventLog(DATA_DIR, e);
+  if (NOTIFY_KINDS.has(e.kind)) notifier.send(e.text);
 });
 
 // ---- Simulation loop: wall-clock driven so 1 sim day really is 1 real hour ----
@@ -70,6 +101,7 @@ setInterval(() => {
 
 setInterval(() => hub.broadcastDelta(), 200);
 setInterval(() => saveWorld(DATA_DIR, world), 30_000);
+setInterval(() => scheduler.check(() => notifier.send("Hourly Claude budget reached; villagers are on autopilot until it resets.")), 1000);
 
 // ---- HTTP + WebSocket -------------------------------------------------------
 const app = Fastify({ logger: false });
@@ -84,6 +116,7 @@ app.get("/api/health", async () => ({
   viewers: hub.viewerCount,
   paused: world.paused,
   speed: world.speed,
+  ai: scheduler.status(),
 }));
 
 app.get("/api/state", async () => hub.snapshot(false).state);
@@ -106,6 +139,7 @@ console.log(`[server] listening on http://0.0.0.0:${PORT}`);
 function shutdown(signal: string) {
   console.log(`[server] ${signal} received, saving world...`);
   saveWorld(DATA_DIR, world);
+  saveSettings(DATA_DIR, settings);
   process.exit(0);
 }
 process.on("SIGINT", () => shutdown("SIGINT"));

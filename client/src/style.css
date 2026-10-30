@@ -13,6 +13,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 #game { position: fixed; inset: 0; }
 #game canvas { display: block; }
 .panel {
+  box-sizing: border-box;
   position: fixed;
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -22,8 +23,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 }
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
-#topbar { top: 10px; left: 10px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; max-width: calc(100vw - 20px); }
-#admin { top: 56px; left: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#hud { position: fixed; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 6px; max-width: calc(100vw - 20px); align-items: flex-start; }
+#topbar { position: static; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#admin { position: static; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 #admin .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.15); margin: 0 4px; }
 button {
   background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.12);
@@ -33,7 +35,7 @@ button:hover { background: rgba(255,255,255,0.16); }
 button.danger { border-color: var(--danger); color: #f0a8a6; }
 button.active { border-color: var(--accent); color: var(--accent); }
 #feed {
-  bottom: 10px; left: 10px; width: min(380px, calc(100vw - 20px)); max-height: 34vh; overflow-y: auto;
+  bottom: 10px; left: 10px; width: min(360px, calc(100vw - 20px)); max-height: 30vh; overflow-y: auto;
   display: flex; flex-direction: column-reverse; gap: 4px; font-size: 12px;
 }
 #feed .ev { opacity: 0.9; }
@@ -45,7 +47,7 @@ button.active { border-color: var(--accent); color: var(--accent); }
 #inspector .bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 2px; }
 #inspector .bar > div { height: 100%; background: var(--accent); }
 #inspector ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
-#hint { position: fixed; bottom: 10px; right: 10px; font-size: 11px; }
+#hint { position: fixed; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #777; }
 .dot.connected { background: #6abf69; }
 .dot.connecting { background: #e0a458; }
@@ -54,3 +56,15 @@ button.active { border-color: var(--accent); color: var(--accent); }
   #feed { max-height: 22vh; }
   #hint { display: none; }
 }
+
+#inbox { bottom: 10px; right: 10px; width: min(300px, calc(100vw - 390px)); max-height: 40vh; overflow-y: auto; font-size: 12px; }
+#inbox .inbox-title { font-weight: bold; color: var(--accent); margin-bottom: 6px; }
+#inbox .pet { border-top: 1px solid rgba(255,255,255,0.08); padding: 6px 0; }
+#inbox .pet .who { font-weight: bold; }
+#inbox .pet .reason { color: var(--muted); font-style: italic; margin: 2px 0 4px; }
+#inbox .pet .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+#inbox .pet.granted .who::after { content: " · granted"; color: #6abf69; font-weight: normal; }
+#inbox .pet.denied .who::after { content: " · silent"; color: var(--muted); font-weight: normal; }
+#inbox .empty { color: var(--muted); }
+#ai.warn { color: #f0a8a6; }
+@media (max-width: 560px) { #inbox { display: none; } }

@@ -33,6 +33,8 @@ export function createWorld(seed: number, width = DEFAULT_SIZE, height = DEFAULT
     paused: false,
     speed: 1,
     dirtyTiles: [],
+    petitions: [],
+    rumors: [],
   };
   generateTerrain(w);
   placeStartingStructures(w);

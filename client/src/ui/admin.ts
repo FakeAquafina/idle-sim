@@ -15,6 +15,36 @@ export function setupAdminBar(isAdmin: boolean, send: (cmd: AdminCommand) => voi
   bar.querySelectorAll<HTMLButtonElement>("button[data-speed]").forEach((b) => {
     b.onclick = () => send({ cmd: "speed", value: Number(b.dataset.speed) });
   });
+  document.getElementById("giftBtn")!.onclick = () => {
+    const what = prompt("Gift what? wood, stone, food, seeds, or blessing", "wood")?.trim().toLowerCase();
+    if (!what) return;
+    if (what === "blessing") return send({ cmd: "gift", resource: "blessing" });
+    if (!["wood", "stone", "food", "seeds"].includes(what)) return alert("Unknown gift");
+    const amount = Number(prompt("How many? (1-100)", "20"));
+    if (!Number.isFinite(amount) || amount < 1) return;
+    send({ cmd: "gift", resource: what as "wood" | "stone" | "food" | "seeds", amount: Math.floor(amount) });
+  };
+  document.getElementById("rumorBtn")!.onclick = () => {
+    const text = prompt("Whisper a rumor the villagers will talk about:");
+    if (text?.trim()) send({ cmd: "rumor", text: text.trim() });
+  };
+  document.getElementById("aiBtn")!.onclick = () => send({ cmd: "setAi", enabled: !currentAi });
+  document.getElementById("budgetBtn")!.onclick = () => {
+    const v = Number(prompt("Max Claude spend in dollars per hour (0-20):", String(currentBudget)));
+    if (Number.isFinite(v) && v >= 0) send({ cmd: "setBudget", usdPerHour: v });
+  };
+}
+
+let currentAi = true;
+let currentBudget = 0.15;
+
+export function updateAdminSettings(aiEnabled: boolean, budgetUsdPerHour: number): void {
+  currentAi = aiEnabled;
+  currentBudget = budgetUsdPerHour;
+  const aiBtn = document.getElementById("aiBtn");
+  const budgetBtn = document.getElementById("budgetBtn");
+  if (aiBtn) aiBtn.textContent = `AI: ${aiEnabled ? "on" : "off"}`;
+  if (budgetBtn) budgetBtn.textContent = `$${budgetUsdPerHour.toFixed(2)}/h`;
 }
 
 export function showAdminMessage(ok: boolean, message?: string): void {

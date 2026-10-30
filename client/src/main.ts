@@ -3,10 +3,11 @@ import { Mirror, connect } from "./net.ts";
 import { Camera } from "./render/camera.ts";
 import { TILE } from "./render/projection.ts";
 import { Scene } from "./render/scene.ts";
-import { highlightSpeed, setupAdminBar, showAdminMessage } from "./ui/admin.ts";
+import { highlightSpeed, setupAdminBar, showAdminMessage, updateAdminSettings } from "./ui/admin.ts";
+import { renderInbox, setupInbox } from "./ui/inbox.ts";
 import { addEvent, resetFeed } from "./ui/feed.ts";
 import { renderInspector, selectVillager } from "./ui/inspector.ts";
-import { updateStatus, updateTopbar, updateViewers } from "./ui/topbar.ts";
+import { updateAi, updateStatus, updateTopbar, updateViewers } from "./ui/topbar.ts";
 
 // Admin token comes from ?token=... once, then sticks in localStorage.
 const params = new URLSearchParams(location.search);
@@ -40,7 +41,11 @@ const conn = connect(token, {
     updateTopbar(s);
     updateViewers(msg.viewers);
     setupAdminBar(msg.isAdmin, (cmd) => conn.sendAdmin(cmd));
+    setupInbox(msg.isAdmin, (cmd) => conn.sendAdmin(cmd));
     highlightSpeed(s.speed, s.paused);
+    updateAdminSettings(msg.settings.aiEnabled, msg.settings.budgetUsdPerHour);
+    updateAi(msg.ai);
+    renderInbox(s.petitions);
     if (firstSnapshot) {
       camera.fit(s.width * TILE, s.height * TILE);
       firstSnapshot = false;
@@ -54,6 +59,9 @@ const conn = connect(token, {
     updateTopbar(s);
     renderInspector(s);
     highlightSpeed(s.speed, s.paused);
+    updateAdminSettings(msg.settings.aiEnabled, msg.settings.budgetUsdPerHour);
+    updateAi(msg.ai);
+    renderInbox(s.petitions);
   },
   onEvent: addEvent,
   onViewers: updateViewers,

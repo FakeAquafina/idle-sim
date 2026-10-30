@@ -1,6 +1,7 @@
 // WebSocket messages between server and viewers.
 
-import type { Clock, ResourceKind, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
+import type { Petition, PetitionAsk, Rumor } from "./actions.ts";
+import type { AiStatus, Clock, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
 
 /** Villager as sent over the wire: same as Villager but without the path. */
 export type VillagerView = Omit<Villager, "path">;
@@ -10,6 +11,8 @@ export interface SnapshotMessage {
   state: Omit<WorldState, "villagers" | "dirtyTiles" | "rngState"> & { villagers: VillagerView[] };
   viewers: number;
   isAdmin: boolean;
+  settings: Settings;
+  ai: AiStatus;
 }
 
 export interface DeltaMessage {
@@ -21,6 +24,10 @@ export interface DeltaMessage {
   villagers: VillagerView[];
   structures: Structure[];
   tiles: { i: number; tile: Tile }[];
+  petitions: Petition[];
+  rumors: Rumor[];
+  settings: Settings;
+  ai: AiStatus;
 }
 
 export interface EventMessage {
@@ -45,7 +52,13 @@ export type AdminCommand =
   | { cmd: "pause" }
   | { cmd: "resume" }
   | { cmd: "speed"; value: number }
-  | { cmd: "reset" };
+  | { cmd: "reset" }
+  | { cmd: "grant"; petitionId: string; amount?: number; message?: string }
+  | { cmd: "deny"; petitionId: string; message?: string }
+  | { cmd: "gift"; resource: Exclude<PetitionAsk, "newcomer">; amount?: number }
+  | { cmd: "rumor"; text: string }
+  | { cmd: "setAi"; enabled: boolean }
+  | { cmd: "setBudget"; usdPerHour: number };
 
 export interface AdminMessage {
   type: "admin";

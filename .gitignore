@@ -7,3 +7,4 @@ server/data/events.jsonl
 server/data/petitions.json
 .DS_Store
 *.log
+server/data/settings.json

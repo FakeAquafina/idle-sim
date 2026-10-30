@@ -2,13 +2,19 @@
 
 import type { AdminCommand, ClientMessage, DeltaMessage, ServerMessage, SnapshotMessage, WorldEvent } from "@idle-sim/shared";
 
+import type { AiStatus, Settings } from "@idle-sim/shared";
+
 export type MirrorState = SnapshotMessage["state"];
 
 export class Mirror {
   state: MirrorState | null = null;
+  settings: Settings | null = null;
+  ai: AiStatus | null = null;
 
   applySnapshot(msg: SnapshotMessage): void {
     this.state = msg.state;
+    this.settings = msg.settings;
+    this.ai = msg.ai;
   }
 
   /** Returns true if any tiles changed (so the renderer can redraw terrain). */
@@ -22,6 +28,10 @@ export class Mirror {
     s.villagers = msg.villagers;
     s.structures = msg.structures;
     for (const { i, tile } of msg.tiles) s.tiles[i] = tile;
+    s.petitions = msg.petitions;
+    s.rumors = msg.rumors;
+    this.settings = msg.settings;
+    this.ai = msg.ai;
     return msg.tiles.length > 0;
   }
 }
