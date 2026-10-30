@@ -241,15 +241,41 @@ ssh -L 3000:localhost:3000 murph@<box>      # then open http://localhost:3000/?t
 
 Petition ids are in the event feed and `/api/state`.
 
-How to expose it, from least to most setup:
+### Port forwarding with Caddy
 
-1. **Cloudflare Tunnel** or **Tailscale Funnel**: no open ports on your router,
-   HTTPS for free. `tailscale funnel 3000` on the subnet-router box (pointing
-   at `http://<box-lan-ip>:3000`) is one command.
-2. **Port forward** router port 443/80 to the box and put **Caddy** in front
-   for automatic HTTPS (`reverse_proxy localhost:3000` in its Caddyfile). Plain
-   port-forwarding of 3000 works too, but then the page is `http://` and the
-   browser will say so.
+Caddy gives you automatic HTTPS and passes WebSockets through untouched. You
+need a DNS name pointing at your home's public IP (your own domain, or a free
+dynamic-DNS name such as DuckDNS), and router ports 80 and 443 forwarded to the
+box. Port 80 is only used to obtain the certificate.
+
+On the box:
+
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install -y caddy
+sudo cp ~/idle-sim/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile              # put your real hostname in place of village.example.com
+sudo systemctl reload caddy
+```
+
+Then make Node listen only on loopback, so the only ways in are Caddy and an
+SSH tunnel:
+
+```bash
+nano ~/idle-sim/server/.env                 # SIM_HOST=127.0.0.1
+sudo systemctl restart idle-sim
+```
+
+Caddy reports each visitor's real address to the server (`X-Forwarded-For`),
+and the server believes that header only from loopback (`TRUST_PROXY`), so
+visitors arriving through the proxy are still treated as remote: no admin for
+them, and the per-address cap counts them properly. The admin path is
+unchanged: the SSH tunnel or `scripts/admin.ts` on the box.
+
+If you'd rather not open router ports at all, a **Cloudflare Tunnel** or
+`tailscale funnel` on your subnet-router box gets HTTPS with no forwarding.
 
 ### Day to day on the box
 

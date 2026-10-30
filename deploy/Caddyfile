@@ -1,0 +1,8 @@
+# Caddy in front of the village: automatic HTTPS, WebSockets pass through.
+# Install: sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+# Replace the hostname with a DNS name that points at your public IP, and
+# forward router ports 80 and 443 to this box (80 is needed for the certificate).
+village.example.com {
+	encode zstd gzip
+	reverse_proxy localhost:3000
+}

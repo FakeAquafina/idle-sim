@@ -39,6 +39,11 @@ type Persona = import("./sim/villager.ts").Persona;
 
 // SIM_PORT rather than PORT: dev tools often set PORT for the Vite front end.
 const PORT = Number(process.env.SIM_PORT ?? 3000);
+// Bind to 127.0.0.1 when a reverse proxy (Caddy) on the same box fronts it.
+const HOST = process.env.SIM_HOST ?? "0.0.0.0";
+// Which proxies may tell us the real client address (X-Forwarded-For). Only
+// loopback by default, so Caddy on this box is believed and nobody else is.
+const TRUST_PROXY = process.env.TRUST_PROXY ?? "loopback";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 if (!ADMIN_TOKEN) console.warn("[server] ADMIN_TOKEN is not set: admin commands are disabled.");
 // Admin is only reachable from the box itself unless ADMIN_REMOTE=1 (dev convenience).
@@ -135,7 +140,7 @@ setInterval(() => {
 }, 5000);
 
 // ---- HTTP + WebSocket -------------------------------------------------------
-const app = Fastify({ logger: false });
+const app = Fastify({ logger: false, trustProxy: TRUST_PROXY });
 await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
 app.get("/api/health", async () => ({
@@ -155,7 +160,8 @@ app.get("/api/state", async () => hub.snapshot(false).state);
 
 app.get("/ws", { websocket: true }, (socket, req) => {
   const token = (req.query as Record<string, string | undefined>).token;
-  hub.add(socket, token, req.socket.remoteAddress);
+  // req.ip is the real client when the connection came through a trusted proxy.
+  hub.add(socket, token, req.ip);
 });
 
 if (existsSync(CLIENT_DIST)) {
@@ -165,8 +171,8 @@ if (existsSync(CLIENT_DIST)) {
   console.log("[server] client/dist not found; run the Vite dev server or `npm run build`.");
 }
 
-await app.listen({ port: PORT, host: "0.0.0.0" });
-console.log(`[server] listening on http://0.0.0.0:${PORT}`);
+await app.listen({ port: PORT, host: HOST });
+console.log(`[server] listening on http://${HOST}:${PORT}`);
 
 function shutdown(signal: string) {
   console.log(`[server] ${signal} received, saving world...`);
