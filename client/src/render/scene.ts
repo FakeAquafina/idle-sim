@@ -5,14 +5,18 @@
 //   labels   names and speech bubbles, never hidden behind a building
 
 import { Container, Graphics, type Renderer, Sprite, Text } from "pixi.js";
-import { STRUCTURES, type Animal, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
+import { STRUCTURES, type Animal, type Season, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
 import { TILE_H, TILE_W, footprint, projection } from "./projection.ts";
 import {
+  PALETTES,
   bakeDecor,
+  chimneyPoint,
+  destroyDecor,
   drawAnimal,
   drawFlame,
   drawGroundTile,
+  drawSmoke,
   drawStructure,
   drawVillager,
   footprintCenter,
@@ -22,6 +26,8 @@ import {
   structureHeight,
   villagerHeight,
   type DecorSet,
+  type Palette,
+  type Shore,
 } from "./sprites.ts";
 
 export type Pick =
@@ -47,16 +53,20 @@ interface StructureView {
   root: Container;
   gfx: Graphics;
   flame: Graphics | null;
+  smoke: Graphics | null;
   label: Text;
   key: string;
   s: Structure;
 }
 
+/** Something that walks: three poses (standing, two steps) and a facing direction. */
 interface Mover {
   root: Container;
-  gfx: Graphics;
+  body: Container;
+  frames: [Graphics, Graphics, Graphics];
   target: { x: number; y: number };
   key: string;
+  facing: 1 | -1;
 }
 
 interface VillagerLook extends Mover {
@@ -68,6 +78,7 @@ interface VillagerLook extends Mover {
 }
 
 const LABEL_STYLE = { fontSize: 9, fill: 0xffffff, fontFamily: "ui-monospace, Menlo, monospace", stroke: { color: 0x101418, width: 2 } };
+const WALK_FRAME_MS = 160;
 
 export class Scene {
   readonly root = new Container();
@@ -80,12 +91,14 @@ export class Scene {
   private villagerViews = new Map<string, VillagerLook>();
   private animalViews = new Map<string, Mover>();
   private textures: DecorSet;
+  private season: Season = "summer";
+  private pal: Palette = PALETTES.summer;
   private selection: Pick | null = null;
   private hovered: Pick | null = null;
   state: MirrorState | null = null;
 
-  constructor(renderer: Renderer) {
-    this.textures = bakeDecor(renderer);
+  constructor(private renderer: Renderer) {
+    this.textures = bakeDecor(renderer, this.pal);
     this.objects.sortableChildren = true;
     this.root.addChild(this.ground, this.hover, this.objects, this.labels);
   }
@@ -94,9 +107,11 @@ export class Scene {
 
   rebuildAll(state: MirrorState): void {
     this.state = state;
-    for (const d of this.decor.values()) d.sprite.destroy();
-    this.decor.clear();
-    for (const v of this.structureViews.values()) v.root.destroy({ children: true });
+    this.clearDecor();
+    for (const v of this.structureViews.values()) {
+      v.root.destroy({ children: true });
+      v.label.destroy();
+    }
     this.structureViews.clear();
     for (const v of this.villagerViews.values()) {
       v.root.destroy({ children: true });
@@ -106,8 +121,25 @@ export class Scene {
     this.villagerViews.clear();
     for (const v of this.animalViews.values()) v.root.destroy({ children: true });
     this.animalViews.clear();
+    this.applySeason(state.clock.season);
     this.drawTiles(state);
     this.update(state, true);
+  }
+
+  private clearDecor(): void {
+    for (const d of this.decor.values()) d.sprite.destroy();
+    this.decor.clear();
+  }
+
+  /** Swap palettes and rebake the trees and rocks when the season turns. */
+  private applySeason(season: Season): void {
+    if (season === this.season && this.textures) return;
+    this.season = season;
+    this.pal = PALETTES[season];
+    destroyDecor(this.textures);
+    this.textures = bakeDecor(this.renderer, this.pal);
+    this.clearDecor();
+    for (const v of this.structureViews.values()) v.key = ""; // snow on the roofs
   }
 
   /** Redraw the ground and refresh trees/rocks. Cheap enough to call whenever tiles change. */
@@ -115,19 +147,25 @@ export class Scene {
     this.state = state;
     const g = this.ground;
     g.clear();
+    const W = state.width;
+    const kindAt = (x: number, y: number): Tile["kind"] | null => (x < 0 || y < 0 || x >= W || y >= state.height ? null : state.tiles[y * W + x].kind);
+    const land = (k: Tile["kind"] | null) => k !== null && k !== "water";
     for (let y = 0; y < state.height; y++) {
-      for (let x = 0; x < state.width; x++) {
-        const t = state.tiles[y * state.width + x];
+      for (let x = 0; x < W; x++) {
+        const t = state.tiles[y * W + x];
         const p = projection.toScreen(x + 0.5, y + 0.5);
-        drawGroundTile(g, p.x, p.y, t, x, y);
-        this.syncDecor(x, y, t, state.width);
+        let shore: Shore | undefined;
+        if (t.kind === "water") shore = { n: land(kindAt(x, y - 1)), e: land(kindAt(x + 1, y)), s: land(kindAt(x, y + 1)), w: land(kindAt(x - 1, y)) };
+        drawGroundTile(g, p.x, p.y, t, x, y, this.pal, shore);
+        const nearWater = t.kind !== "water" && [kindAt(x, y - 1), kindAt(x + 1, y), kindAt(x, y + 1), kindAt(x - 1, y)].includes("water");
+        this.syncDecor(x, y, t, W, nearWater);
       }
     }
   }
 
-  private syncDecor(x: number, y: number, t: Tile, width: number): void {
+  private syncDecor(x: number, y: number, t: Tile, width: number, nearWater: boolean): void {
     const i = y * width + x;
-    const key = decorKey(t);
+    const key = decorKey(t, x, y, nearWater);
     const existing = this.decor.get(i);
     if (existing?.key === key) return;
     if (existing) {
@@ -137,7 +175,12 @@ export class Scene {
     if (!key) return;
     const h = hash(x, y, 7);
     const big = t.amount >= 7;
-    const tex = t.kind === "forest" ? this.textures.trees[h % 2][big ? 1 : 0] : t.kind === "rock" ? this.textures.rock[big ? 1 : 0] : this.textures.ore[big ? 1 : 0];
+    const tex =
+      key.startsWith("forest") ? this.textures.trees[h % 2][big ? 1 : 0]
+      : key.startsWith("rock") ? this.textures.rock[big ? 1 : 0]
+      : key.startsWith("ore") ? this.textures.ore[big ? 1 : 0]
+      : key === "reeds" ? this.textures.reeds
+      : this.textures.bush;
     const sprite = makeSprite(tex);
     // Nudge within the tile so forests don't look like a grid.
     const jx = ((h >> 4) % 7) - 3;
@@ -151,6 +194,10 @@ export class Scene {
 
   update(state: MirrorState, snap = false): void {
     this.state = state;
+    if (state.clock.season !== this.season) {
+      this.applySeason(state.clock.season);
+      this.drawTiles(state);
+    }
     this.updateStructures(state.structures);
     this.updateVillagers(state.villagers, snap);
     this.updateAnimals(state.animals ?? [], snap);
@@ -172,7 +219,7 @@ export class Scene {
         root.addChild(gfx);
         this.labels.addChild(label);
         this.objects.addChild(root);
-        view = { root, gfx, flame: null, label, key: "", s };
+        view = { root, gfx, flame: null, smoke: null, label, key: "", s };
         this.structureViews.set(s.id, view);
       }
       view.s = s;
@@ -195,7 +242,7 @@ export class Scene {
     const p = projection.toScreen(s.x, s.y);
     view.root.position.set(p.x, p.y);
     view.gfx.clear();
-    drawStructure(view.gfx, s, def);
+    drawStructure(view.gfx, s, def, this.pal);
     const height = structureHeight(s.kind, s.built);
     // Tall things sort by their front corner, flat things sit just under whatever stands on them.
     view.root.zIndex = height > 0 ? projection.depth(s.x + s.w, s.y + s.h) - 0.5 : projection.depth(s.x, s.y) - 0.5;
@@ -204,9 +251,32 @@ export class Scene {
       view.flame = new Graphics();
       view.root.addChild(view.flame);
     }
+    if (s.built && chimneyPoint(s) && !view.smoke) {
+      view.smoke = new Graphics();
+      view.root.addChild(view.smoke);
+    }
     view.label.text = s.name ?? def.label;
     view.label.position.set(p.x, p.y - height - 4);
     view.label.visible = s.built && s.kind !== "farm" && s.kind !== "pen";
+  }
+
+  // ---- Movers (villagers and animals) ------------------------------------------------
+
+  private createMover(): Mover {
+    const root = new Container();
+    const body = new Container();
+    const frames: [Graphics, Graphics, Graphics] = [new Graphics(), new Graphics(), new Graphics()];
+    body.addChild(...frames);
+    root.addChild(body);
+    this.objects.addChild(root);
+    return { root, body, frames, target: { x: 0, y: 0 }, key: "", facing: 1 };
+  }
+
+  private redrawMover(m: Mover, draw: (g: Graphics, step: 0 | 1 | 2) => void): void {
+    m.frames.forEach((g, i) => {
+      g.clear();
+      draw(g, i as 0 | 1 | 2);
+    });
   }
 
   // ---- Villagers ------------------------------------------------------------------
@@ -227,12 +297,13 @@ export class Scene {
       if (snap) look.root.position.set(p.x, p.y);
 
       const resting = v.goal?.type === "rest";
-      const key = `${v.stage}|${v.speech?.text ?? ""}|${resting}`;
+      const carrying = Object.values(v.inventory).some((n) => (n ?? 0) > 0);
+      const key = `${v.stage}|${v.speech?.text ?? ""}|${resting}|${carrying}`;
       if (look.key !== key) {
         look.key = key;
         look.height = villagerHeight(v.stage);
-        look.gfx.clear();
-        drawVillager(look.gfx, lookFor(v.id, v.stage, resting));
+        const opts = lookFor(v.id, v.stage, resting, carrying);
+        this.redrawMover(look, (g, step) => drawVillager(g, opts, step));
         if (v.speech) {
           look.bubbleText.text = v.speech.text;
           const bw = Math.ceil(look.bubbleText.width) + 8;
@@ -258,10 +329,7 @@ export class Scene {
   }
 
   private createVillagerLook(v: VillagerView): VillagerLook {
-    const root = new Container();
-    const gfx = new Graphics();
-    root.addChild(gfx);
-    this.objects.addChild(root);
+    const mover = this.createMover();
     const name = new Text({ text: v.name, style: LABEL_STYLE, resolution: 2 });
     name.anchor.set(0.5, 1);
     const bubble = new Container();
@@ -274,7 +342,7 @@ export class Scene {
     bubble.addChild(bubbleBg, bubbleText);
     bubble.visible = false;
     this.labels.addChild(name, bubble);
-    return { root, gfx, name, bubble, bubbleBg, bubbleText, target: { x: 0, y: 0 }, key: "", height: villagerHeight(v.stage) };
+    return { ...mover, name, bubble, bubbleBg, bubbleText, height: villagerHeight(v.stage) };
   }
 
   // ---- Animals --------------------------------------------------------------------
@@ -286,11 +354,7 @@ export class Scene {
       seen.add(a.id);
       let look = this.animalViews.get(a.id);
       if (!look) {
-        const root = new Container();
-        const gfx = new Graphics();
-        root.addChild(gfx);
-        this.objects.addChild(root);
-        look = { root, gfx, target: { x: 0, y: 0 }, key: "" };
+        look = this.createMover();
         this.animalViews.set(a.id, look);
         snap = true;
       }
@@ -300,8 +364,7 @@ export class Scene {
       const key = `${a.kind}|${a.tame}`;
       if (look.key !== key) {
         look.key = key;
-        look.gfx.clear();
-        drawAnimal(look.gfx, a.kind, a.tame);
+        this.redrawMover(look, (g, step) => drawAnimal(g, a.kind, a.tame, step));
       }
     }
     for (const [id, look] of this.animalViews) {
@@ -314,28 +377,43 @@ export class Scene {
 
   // ---- Per-frame -------------------------------------------------------------------
 
-  /** Ease movers toward their latest server position, depth-sort, flicker fires, place labels. */
+  /** Ease movers toward their latest server position, animate, depth-sort, place labels. */
   animate(dt: number, nowMs: number): void {
     const k = Math.min(1, dt * 0.25);
+    const walkStep = (Math.floor(nowMs / WALK_FRAME_MS) % 2) + 1;
+    const stepMover = (m: Mover) => {
+      const dx = m.target.x - m.root.x;
+      const dy = m.target.y - m.root.y;
+      const moving = Math.abs(dx) + Math.abs(dy) > 0.6;
+      m.root.x += dx * k;
+      m.root.y += dy * k;
+      if (Math.abs(dx) > 0.4) m.facing = dx < 0 ? -1 : 1;
+      m.body.scale.x = m.facing;
+      const frame = moving ? walkStep : 0;
+      for (let i = 0; i < 3; i++) m.frames[i].visible = i === frame;
+      const w = projection.toWorld(m.root.x, m.root.y);
+      m.root.zIndex = projection.depth(w.x, w.y);
+    };
     for (const look of this.villagerViews.values()) {
-      look.root.x += (look.target.x - look.root.x) * k;
-      look.root.y += (look.target.y - look.root.y) * k;
-      const w = projection.toWorld(look.root.x, look.root.y);
-      look.root.zIndex = projection.depth(w.x, w.y);
+      stepMover(look);
       look.name.position.set(Math.round(look.root.x), Math.round(look.root.y - look.height - 2));
       if (look.bubble.visible) look.bubble.position.set(Math.round(look.root.x), Math.round(look.root.y - look.height - 14));
     }
-    for (const look of this.animalViews.values()) {
-      look.root.x += (look.target.x - look.root.x) * k;
-      look.root.y += (look.target.y - look.root.y) * k;
-      const w = projection.toWorld(look.root.x, look.root.y);
-      look.root.zIndex = projection.depth(w.x, w.y);
-    }
+    for (const look of this.animalViews.values()) stepMover(look);
+
     const t = nowMs / 1000;
+    const tod = this.state?.clock.timeOfDay ?? 0.5;
+    const night = tod < 0.25 || tod > 0.8;
+    const smokeStrength = night ? 1 : this.pal.snow ? 0.8 : 0.35;
     for (const view of this.structureViews.values()) {
       if (view.flame) {
         const m = footprintCenter(view.s.w, view.s.h);
         drawFlame(view.flame, m.x, m.y, t);
+      }
+      if (view.smoke) {
+        const cp = chimneyPoint(view.s);
+        const lived = view.s.kind !== "house" || view.s.ownerIds.length > 0;
+        if (cp) drawSmoke(view.smoke, cp.x, cp.y, t + hash(view.s.x, view.s.y) % 7, lived ? smokeStrength : 0);
       }
     }
   }
@@ -349,9 +427,10 @@ export class Scene {
       const m = footprintCenter(s.w, s.h);
       const base = { x: view.root.x + m.x, y: view.root.y + m.y };
       if (s.kind === "campfire") out.push({ x: base.x, y: base.y - 4, color: 0xffa040, radius: 44, strength: 1 });
-      else if (s.kind === "house") out.push({ x: base.x - 8, y: base.y - 6, color: 0xffd080, radius: 16, strength: 0.6 });
+      else if (s.kind === "house") out.push({ x: base.x - 8, y: base.y - 6, color: 0xffd080, radius: 16, strength: s.ownerIds.length ? 0.6 : 0.15 });
       else if (s.kind === "shrine") out.push({ x: base.x, y: base.y - 10, color: 0xd0e0ff, radius: 20, strength: 0.5 });
       else if (s.kind === "workshop") out.push({ x: base.x + 6, y: base.y - 4, color: 0xffb060, radius: 14, strength: 0.5 });
+      else if (s.kind === "dock") out.push({ x: base.x + 10, y: base.y - 12, color: 0xffd166, radius: 12, strength: 0.4 });
     }
     return out;
   }
@@ -429,8 +508,12 @@ export class Scene {
   }
 }
 
-function decorKey(t: Tile): string {
+/** What standing thing a tile carries, if any. Trees and rocks follow the tile; bushes and reeds are decoration. */
+function decorKey(t: Tile, x: number, y: number, nearWater: boolean): string {
   if ((t.kind === "forest" || t.kind === "rock" || t.kind === "ore") && t.amount > 0) return `${t.kind}|${t.amount >= 7 ? "big" : "small"}`;
+  const h = hash(x, y, 3);
+  if (nearWater && (t.kind === "grass" || t.kind === "sand") && h % 4 === 0) return "reeds";
+  if (t.kind === "grass" && h % 17 === 0) return "bush";
   return "";
 }
 

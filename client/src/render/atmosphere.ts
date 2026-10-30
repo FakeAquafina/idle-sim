@@ -41,6 +41,11 @@ export class Atmosphere {
     const gloom = w === "storm" ? 0.35 : w === "rain" ? 0.15 : 0;
 
     if (night > 0) g.rect(0, 0, width, height).fill({ color: 0x0a1030, alpha: 0.55 * night });
+    // Golden light around sunrise (~06:00) and sunset (~19:00).
+    const dawn = Math.max(0, 1 - Math.abs(t - 0.27) / 0.06);
+    const dusk = Math.max(0, 1 - Math.abs(t - 0.79) / 0.06);
+    if (dawn > 0) g.rect(0, 0, width, height).fill({ color: 0xffb070, alpha: 0.16 * dawn });
+    if (dusk > 0) g.rect(0, 0, width, height).fill({ color: 0xff7a4a, alpha: 0.2 * dusk });
     if (w === "rain") g.rect(0, 0, width, height).fill({ color: 0x3a4a66, alpha: 0.18 });
     if (w === "storm") g.rect(0, 0, width, height).fill({ color: 0x222a3a, alpha: 0.35 });
     if (w === "snow") g.rect(0, 0, width, height).fill({ color: 0xffffff, alpha: 0.12 });

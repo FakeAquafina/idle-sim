@@ -5,7 +5,12 @@
 // a villager standing in its middle is at (i + 0.5, j + 0.5).
 
 export const TILE_W = 32;
-export const TILE_H = 16;
+/**
+ * Tile height sets the viewing angle. 16 is the classic 2:1 isometric (about
+ * 30° above the ground); 20 looks down a little more steeply, so buildings
+ * hide less of what stands behind them. Everything else derives from this.
+ */
+export const TILE_H = 20;
 
 export interface Projection {
   toScreen(x: number, y: number): { x: number; y: number };
@@ -17,8 +22,8 @@ export interface Projection {
 }
 
 /**
- * Classic 2:1 isometric. World +x runs down-right on screen, +y runs down-left,
- * so a tile is a 32×16 diamond and the map is a big diamond with its top at (0,0).
+ * Isometric. World +x runs down-right on screen, +y runs down-left, so a tile
+ * is a TILE_W × TILE_H diamond and the map is a big diamond with its top at (0,0).
  */
 export const isometric: Projection = {
   toScreen: (x, y) => ({ x: (x - y) * (TILE_W / 2), y: (x + y) * (TILE_H / 2) }),
