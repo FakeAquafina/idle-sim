@@ -17,6 +17,7 @@ import {
   drawFlame,
   drawGroundTile,
   drawSmoke,
+  drawSurroundings,
   drawStructure,
   drawVillager,
   footprintCenter,
@@ -82,6 +83,7 @@ const WALK_FRAME_MS = 160;
 
 export class Scene {
   readonly root = new Container();
+  private surroundings = new Graphics();
   private ground = new Graphics();
   private hover = new Graphics();
   private objects = new Container();
@@ -100,7 +102,7 @@ export class Scene {
   constructor(private renderer: Renderer) {
     this.textures = bakeDecor(renderer, this.pal);
     this.objects.sortableChildren = true;
-    this.root.addChild(this.ground, this.hover, this.objects, this.labels);
+    this.root.addChild(this.surroundings, this.ground, this.hover, this.objects, this.labels);
   }
 
   // ---- Building the scene -----------------------------------------------------
@@ -145,6 +147,8 @@ export class Scene {
   /** Redraw the ground and refresh trees/rocks. Cheap enough to call whenever tiles change. */
   drawTiles(state: MirrorState): void {
     this.state = state;
+    this.surroundings.clear();
+    drawSurroundings(this.surroundings, state.width, state.height, this.pal, state.coast);
     const g = this.ground;
     g.clear();
     const W = state.width;

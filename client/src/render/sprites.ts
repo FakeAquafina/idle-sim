@@ -90,7 +90,16 @@ export interface Shore {
   w: boolean;
 }
 
-/** One ground tile: a diamond centred on (cx, cy) with a little texture. */
+/** Blend toward black (f<1) or white (f>1) by a small amount. */
+function shade(c: number, f: number): number {
+  return f < 1 ? lerpColor(0x000000, c, f) : lerpColor(c, 0xffffff, f - 1);
+}
+
+/**
+ * One ground tile: a diamond centred on (cx, cy). Natural ground gets an
+ * irregular shade picked from a hash, no edge lines, and soft darker patches
+ * that straddle several tiles, so the land reads as turf rather than tiling.
+ */
 export function drawGroundTile(g: Graphics, cx: number, cy: number, tile: Tile, x: number, y: number, pal: Palette, shore?: Shore): void {
   const h = hash(x, y);
   const hw = TILE_W / 2;
@@ -104,10 +113,14 @@ export function drawGroundTile(g: Graphics, cx: number, cy: number, tile: Tile, 
     : tile.kind === "rock" ? (pal.snow ? [0xc9ced4, 0xc1c7cd] : [0x7b7f84, 0x74787d])
     : tile.kind === "ore" ? (pal.snow ? [0xbdb6c8, 0xb5aec0] : [0x6d6378, 0x665c71])
     : pal.snow ? [0xcdc6bc, 0xc5beb4] : [0x6e4b2a, 0x684626]; // farmland
-  const base = h & 1 ? pair[0] : pair[1];
+  // Low-frequency variation: blobs of slightly darker or lighter ground a few tiles wide.
+  const blob = hash(Math.floor((x + 1) / 3), Math.floor((y + 1) / 3), 11) % 5; // 0..4
+  const fine = (h >> 2) % 3; // 0..2
+  const f = 0.96 + blob * 0.015 + fine * 0.012; // ~0.96 .. 1.04
+  const base = shade(pair[0], f);
   g.poly([cx, cy - hh, cx + hw, cy, cx, cy + hh, cx - hw, cy]).fill(base);
-  // A faint edge on the two lower sides reads as a grid without shouting.
-  g.moveTo(cx - hw, cy).lineTo(cx, cy + hh).lineTo(cx + hw, cy).stroke({ color: 0x000000, alpha: pal.snow ? 0.06 : 0.12, width: 1 });
+  // Only worked ground keeps a visible edge.
+  if (tile.kind === "farmland") g.poly([cx, cy - hh, cx + hw, cy, cx, cy + hh, cx - hw, cy]).stroke({ color: 0x000000, alpha: 0.2, width: 1 });
 
   const jx = cx - 6 + ((h >> 5) % 10);
   const jy = cy - 3 + ((h >> 9) % 6);
@@ -118,6 +131,7 @@ export function drawGroundTile(g: Graphics, cx: number, cy: number, tile: Tile, 
         if ((h >> 3) % 4 === 0) g.rect(jx, jy, 2, 1).fill({ color: 0xffffff, alpha: 0.7 });
       } else {
         if ((h >> 3) % 3 === 0) g.rect(jx, jy, 1, 2).fill({ color: 0x000000, alpha: 0.18 });
+        if ((h >> 15) % 5 === 0) g.rect(jx - 3, jy + 2, 2, 1).fill({ color: 0xffffff, alpha: 0.1 });
         if (pal.flowers.length && tile.kind === "grass" && (h >> 7) % 9 === 0) {
           const c = pal.flowers[(h >> 11) % pal.flowers.length];
           g.rect(jx, jy, 1, 1).fill(c).rect(jx + 3, jy + 1, 1, 1).fill(c).rect(jx + 1, jy + 2, 1, 1).fill(pal.flowers[(h >> 13) % pal.flowers.length]);
@@ -126,12 +140,13 @@ export function drawGroundTile(g: Graphics, cx: number, cy: number, tile: Tile, 
       break;
     case "dirt":
       g.rect(jx, jy, 2, 1).fill({ color: 0x000000, alpha: 0.15 });
+      if ((h >> 12) % 3 === 0) g.rect(jx + 4, jy - 1, 1, 1).fill({ color: 0xffffff, alpha: 0.12 });
       break;
     case "sand":
       if ((h >> 3) % 2 === 0) g.rect(jx, jy, 1, 1).fill({ color: 0x000000, alpha: 0.12 });
       break;
     case "water": {
-      if ((h >> 3) % 3 === 0) g.rect(cx - 7 + ((h >> 5) % 8), cy - 3 + ((h >> 9) % 5), 5, 1).fill({ color: 0x8fb6e0, alpha: 0.6 });
+      if ((h >> 3) % 3 === 0) g.rect(cx - 7 + ((h >> 5) % 8), cy - 3 + ((h >> 9) % 5), 5, 1).fill({ color: 0x8fb6e0, alpha: 0.5 });
       if (shore) {
         // Pale foam just inside each edge that touches land.
         const foam = { color: 0xcfe3f5, alpha: 0.8, width: 1 };
@@ -147,6 +162,45 @@ export function drawGroundTile(g: Graphics, cx: number, cy: number, tile: Tile, 
       break;
     default:
       break;
+  }
+}
+
+/**
+ * The land beyond the map edge: a wide muted ring so the world doesn't float
+ * in black. Drawn once per season under everything else.
+ */
+export function drawSurroundings(g: Graphics, width: number, height: number, pal: Palette, coast?: "north" | "south" | "east" | "west"): void {
+  const R = 14; // tiles of margin
+  const corner = (x: number, y: number) => ({ x: (x - y) * (TILE_W / 2), y: (x + y) * (TILE_H / 2) });
+  const outer = [corner(-R, -R), corner(width + R, -R), corner(width + R, height + R), corner(-R, height + R)];
+  const land = shade(pal.grass[1], 0.72);
+  g.poly(outer.flatMap((p) => [p.x, p.y])).fill(land);
+  // The sea continues past the coast edge.
+  if (coast) {
+    const sea = shade(pal.water[1], 0.85);
+    const quad =
+      coast === "north" ? [corner(-R, -R), corner(width + R, -R), corner(width + R, 0), corner(-R, 0)]
+      : coast === "south" ? [corner(-R, height), corner(width + R, height), corner(width + R, height + R), corner(-R, height + R)]
+      : coast === "west" ? [corner(-R, -R), corner(0, -R), corner(0, height + R), corner(-R, height + R)]
+      : [corner(width, -R), corner(width + R, -R), corner(width + R, height + R), corner(width, height + R)];
+    g.poly(quad.flatMap((p) => [p.x, p.y])).fill(sea);
+  }
+  // A scatter of dark tree silhouettes in the margin.
+  for (let y = -R + 1; y < height + R - 1; y++) {
+    for (let x = -R + 1; x < width + R - 1; x++) {
+      const inside = x >= 0 && y >= 0 && x < width && y < height;
+      if (inside) continue;
+      if (coast === "north" && y < 0) continue;
+      if (coast === "south" && y >= height) continue;
+      if (coast === "west" && x < 0) continue;
+      if (coast === "east" && x >= width) continue;
+      const h = hash(x, y, 5);
+      if (h % 3 !== 0) continue;
+      const p = corner(x + 0.5 + ((h >> 4) % 5) / 10, y + 0.5 + ((h >> 8) % 5) / 10);
+      const dark = shade(pal.conifer[0], 0.7);
+      g.rect(p.x - 1, p.y - 5, 2, 5).fill(shade(land, 0.7));
+      g.poly([p.x, p.y - 16, p.x + 5, p.y - 5, p.x - 5, p.y - 5]).fill(dark);
+    }
   }
 }
 

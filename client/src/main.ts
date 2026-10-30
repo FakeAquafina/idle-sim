@@ -3,7 +3,7 @@ import { STRUCTURES, type Vec2 } from "@idle-sim/shared";
 import { Mirror, type MirrorState, connect } from "./net.ts";
 import { Atmosphere } from "./render/atmosphere.ts";
 import { Camera } from "./render/camera.ts";
-import { projection } from "./render/projection.ts";
+import { MAX_TILE_H, MIN_TILE_H, TILE_H, projection, setTileHeight } from "./render/projection.ts";
 import { type Pick, Scene } from "./render/scene.ts";
 import { highlightSpeed, setupAdminBar, showAdminMessage, updateAdminSettings } from "./ui/admin.ts";
 import { addChronicleEntry, resetChronicle, setupChronicle } from "./ui/chronicle.ts";
@@ -23,6 +23,11 @@ if (urlToken !== null) history.replaceState(null, "", location.pathname);
 if (urlToken && LOCAL) localStorage.setItem("adminToken", urlToken);
 const token = LOCAL ? localStorage.getItem("adminToken") : null;
 
+// View angle: ?angle=N once, then remembered; [ and ] nudge it while watching.
+const savedAngle = Number(params.get("angle") ?? localStorage.getItem("viewAngle"));
+if (Number.isFinite(savedAngle) && savedAngle > 0) setTileHeight(savedAngle);
+if (params.has("angle")) history.replaceState(null, "", location.pathname);
+
 const app = new Application();
 await app.init({ resizeTo: window, background: 0x12161b, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true });
 document.getElementById("game")!.appendChild(app.canvas);
@@ -37,6 +42,10 @@ setupFeed(jumpTo);
 onSelectionChange((sel) => scene.setSelection(sel));
 document.getElementById("inspectorClose")!.onclick = () => select(null, null);
 document.getElementById("homeBtn")!.onclick = () => centerOnVillage();
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (e.key === "[" || e.key === "]") changeAngle(TILE_H + (e.key === "]" ? 2 : -2));
+});
 
 // ---- Pointer: hover shows a tooltip, a tap selects ------------------------------------
 app.stage.on("pointermove", (e) => {
@@ -109,6 +118,22 @@ app.ticker.add((ticker) => {
   scene.animate(ticker.deltaTime, now);
   atmosphere.update(now, mirror.state, app.screen.width, app.screen.height, scene.lights(), (x, y) => scene.root.toGlobal({ x, y }), camera.scale);
 });
+
+/** Re-project the whole scene at a new tile height, keeping the camera on the same ground point. */
+function changeAngle(h: number): void {
+  const s = mirror.state;
+  const local = scene.root.toLocal({ x: app.screen.width / 2, y: app.screen.height / 2 });
+  const centerWorld = projection.toWorld(local.x, local.y);
+  const applied = setTileHeight(h);
+  localStorage.setItem("viewAngle", String(applied));
+  if (s) {
+    scene.rebuildAll(s);
+    const c = projection.toScreen(centerWorld.x, centerWorld.y);
+    camera.centerOn(c.x, c.y);
+  }
+  const hint = document.getElementById("hint");
+  if (hint) hint.textContent = `view angle ${applied} (${MIN_TILE_H} flat … ${MAX_TILE_H} steep) · [ and ] to change`;
+}
 
 // ---- Camera helpers ---------------------------------------------------------------------
 /** Look at the storehouse (the village grows around it), zoomed in enough to see faces. */

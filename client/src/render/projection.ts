@@ -8,9 +8,17 @@ export const TILE_W = 32;
 /**
  * Tile height sets the viewing angle. 16 is the classic 2:1 isometric (about
  * 30° above the ground); smaller is flatter and more side-on, larger looks
- * down more steeply. Everything else derives from this one number.
+ * down more steeply. Everything else derives from this one number, which the
+ * viewer can change at runtime (?angle=16 in the URL, or the [ and ] keys).
  */
-export const TILE_H = 14;
+export let TILE_H = 16;
+export const MIN_TILE_H = 10;
+export const MAX_TILE_H = 28;
+
+export function setTileHeight(h: number): number {
+  TILE_H = Math.max(MIN_TILE_H, Math.min(MAX_TILE_H, Math.round(h)));
+  return TILE_H;
+}
 
 export interface Projection {
   toScreen(x: number, y: number): { x: number; y: number };
