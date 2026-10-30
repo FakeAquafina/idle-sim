@@ -7,10 +7,10 @@
 export const TILE_W = 32;
 /**
  * Tile height sets the viewing angle. 16 is the classic 2:1 isometric (about
- * 30° above the ground); 20 looks down a little more steeply, so buildings
- * hide less of what stands behind them. Everything else derives from this.
+ * 30° above the ground); smaller is flatter and more side-on, larger looks
+ * down more steeply. Everything else derives from this one number.
  */
-export const TILE_H = 20;
+export const TILE_H = 14;
 
 export interface Projection {
   toScreen(x: number, y: number): { x: number; y: number };
