@@ -2,7 +2,26 @@
 # Install: sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 # Replace the hostname with a DNS name that points at your public IP, and
 # forward router ports 80 and 443 to this box (80 is needed for the certificate).
+#
+# Caddy on another machine instead? Use reverse_proxy <box-lan-ip>:3000, keep
+# SIM_HOST=0.0.0.0 and set TRUST_PROXY=<that machine's ip> in /etc/idle-sim/env.
 village.example.com {
 	encode zstd gzip
+
+	# Browser hardening; the site is a static viewer plus one WebSocket.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# With Caddy on the same box, set SIM_HOST=127.0.0.1 in /etc/idle-sim/env.
 	reverse_proxy localhost:3000
+
+	log {
+		output file /var/log/caddy/village.log
+		format console
+	}
 }
