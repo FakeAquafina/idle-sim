@@ -19,9 +19,19 @@ import { runAdminCommand, tokenMatches, type AdminContext } from "./admin.ts";
 interface Client {
   socket: WebSocket;
   isAdmin: boolean;
+  ip: string;
 }
 
 export const MAX_VIEWERS = 25;
+/** One person opening a few tabs is fine; a flood from one address is not. */
+export const MAX_PER_IP = 5;
+
+/** True for connections made from the server machine itself (SSH tunnels and scripts land here). */
+export function isLoopback(addr: string | undefined): boolean {
+  if (!addr) return false;
+  const a = addr.replace(/^::ffff:/, "");
+  return a === "127.0.0.1" || a === "::1" || a.startsWith("127.");
+}
 
 export interface HubDeps {
   getWorld: () => WorldState;
@@ -30,6 +40,12 @@ export interface HubDeps {
   adminToken: string;
   adminContext: () => AdminContext;
   serverInfo: () => ServerInfo;
+  /**
+   * Admin commands are honoured only from loopback unless this is true, so a
+   * server on the open internet never has a usable admin path, even with the
+   * token. Reach the admin UI through an SSH tunnel or scripts/admin.ts.
+   */
+  allowRemoteAdmin?: boolean;
 }
 
 export class Hub {
@@ -41,12 +57,19 @@ export class Hub {
     return this.clients.size;
   }
 
-  add(socket: WebSocket, token?: string): void {
+  add(socket: WebSocket, token?: string, remoteAddress?: string): void {
+    const ip = remoteAddress ?? "unknown";
     if (this.clients.size >= MAX_VIEWERS) {
       socket.close(1013, "Too many viewers");
       return;
     }
-    const client: Client = { socket, isAdmin: tokenMatches(token, this.deps.adminToken) };
+    let fromSameIp = 0;
+    for (const c of this.clients) if (c.ip === ip) fromSameIp++;
+    if (fromSameIp >= MAX_PER_IP) {
+      socket.close(1013, "Too many connections from your address");
+      return;
+    }
+    const client: Client = { socket, ip, isAdmin: this.adminAllowed(ip) && tokenMatches(token, this.deps.adminToken) };
     this.clients.add(client);
     socket.on("message", (raw) => this.onMessage(client, raw.toString()));
     socket.on("close", () => {
@@ -118,6 +141,10 @@ export class Hub {
       return;
     }
     if (msg.type !== "admin") return;
+    if (!this.adminAllowed(client.ip)) {
+      this.send(client, { type: "adminResult", ok: false, message: "Admin only works from the server itself (SSH tunnel or scripts/admin.ts)" });
+      return;
+    }
     if (!tokenMatches(msg.token, this.deps.adminToken)) {
       this.send(client, { type: "adminResult", ok: false, message: "Bad admin token" });
       return;
@@ -126,6 +153,10 @@ export class Hub {
     this.send(client, { type: "adminResult", ...result });
     if (msg.command.cmd === "reset") this.broadcastSnapshot();
     else this.broadcastDelta();
+  }
+
+  private adminAllowed(ip: string): boolean {
+    return !!this.deps.allowRemoteAdmin || isLoopback(ip);
   }
 
   private send(client: Client, msg: ServerMessage): void {

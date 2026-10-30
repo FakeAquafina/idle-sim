@@ -13,14 +13,15 @@ import { describeGoal, esc, farmWord, onSelectionChange, renderInspector, select
 import { hideTooltip, showTooltip } from "./ui/tooltip.ts";
 import { updateAi, updateStatus, updateTopbar, updateViewers } from "./ui/topbar.ts";
 
-// Admin token comes from ?token=... once, then sticks in localStorage.
+// Admin token comes from ?token=... once, then sticks in localStorage. The
+// server only honours it from its own machine, so the viewer bothers with it
+// only when opened on localhost (directly, or through an SSH tunnel).
+const LOCAL = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 const params = new URLSearchParams(location.search);
 const urlToken = params.get("token");
-if (urlToken) {
-  localStorage.setItem("adminToken", urlToken);
-  history.replaceState(null, "", location.pathname);
-}
-const token = localStorage.getItem("adminToken");
+if (urlToken !== null) history.replaceState(null, "", location.pathname);
+if (urlToken && LOCAL) localStorage.setItem("adminToken", urlToken);
+const token = LOCAL ? localStorage.getItem("adminToken") : null;
 
 const app = new Application();
 await app.init({ resizeTo: window, background: 0x12161b, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true });

@@ -22,7 +22,8 @@ npm run dev                   # server on :3000, viewer on http://localhost:5173
 
 Open `http://localhost:5173/?token=YOUR_ADMIN_TOKEN` once to unlock the admin bar
 (pause, speed, reset, gifts, whispers, settings). The token is remembered in
-that browser.
+that browser. Admin only works from the server's own machine (see "Exposing it
+to the internet" below); in development the Vite proxy counts as local.
 
 ## Watching
 
@@ -210,16 +211,45 @@ going through GitHub.
 On your tailnet the village is simply `http://<box-lan-ip>:3000` (traffic
 between tailnet devices is already encrypted). Friends need to be on your
 tailnet: invite them from the Tailscale admin console and make sure they are
-allowed the subnet route. For a tidy `https://` name, run on whichever machine
-has Tailscale (the subnet router works):
+allowed the subnet route.
+
+### Exposing it to the internet
+
+The viewer is safe to put on the open internet, because the public side is
+read-only by construction:
+
+- **Admin commands are only honoured from the box itself.** The WebSocket hub
+  checks the connection's address; from anywhere else the admin token is
+  ignored, even if it leaks. The viewer also never sends or stores a token
+  unless it was opened on `localhost`. (Set `ADMIN_REMOTE=1` in `server/.env`
+  to turn this off; don't on a public box.)
+- Viewers can't change anything; they receive world state and events only.
+  The API key, admin token and notification URLs never leave the server.
+- Connections are capped at 25 total and 5 per address, and messages at 64 KB.
+
+To administer the village, use the box's console (Proxmox or SSH):
 
 ```bash
-sudo tailscale serve --bg http://<box-lan-ip>:3000
+cd ~/idle-sim/server && npx tsx scripts/admin.ts '{"cmd":"grant","petitionId":"p3"}'
 ```
 
-`tailscale funnel` can make that public instead; viewers are read-only and
-capped at 25, and only the admin token changes anything, so keep the token off
-public links.
+or open the full admin UI through an SSH tunnel, which makes it local:
+
+```bash
+ssh -L 3000:localhost:3000 murph@<box>      # then open http://localhost:3000/?token=...
+```
+
+Petition ids are in the event feed and `/api/state`.
+
+How to expose it, from least to most setup:
+
+1. **Cloudflare Tunnel** or **Tailscale Funnel**: no open ports on your router,
+   HTTPS for free. `tailscale funnel 3000` on the subnet-router box (pointing
+   at `http://<box-lan-ip>:3000`) is one command.
+2. **Port forward** router port 443/80 to the box and put **Caddy** in front
+   for automatic HTTPS (`reverse_proxy localhost:3000` in its Caddyfile). Plain
+   port-forwarding of 3000 works too, but then the page is `http://` and the
+   browser will say so.
 
 ### Day to day on the box
 

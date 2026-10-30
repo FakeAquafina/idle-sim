@@ -41,6 +41,8 @@ type Persona = import("./sim/villager.ts").Persona;
 const PORT = Number(process.env.SIM_PORT ?? 3000);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 if (!ADMIN_TOKEN) console.warn("[server] ADMIN_TOKEN is not set: admin commands are disabled.");
+// Admin is only reachable from the box itself unless ADMIN_REMOTE=1 (dev convenience).
+const ALLOW_REMOTE_ADMIN = process.env.ADMIN_REMOTE === "1";
 
 const personas = JSON.parse(readFileSync(path.join(DATA_DIR, "villagers.json"), "utf8")) as Persona[];
 const newcomerPool = JSON.parse(readFileSync(path.join(DATA_DIR, "newcomers.json"), "utf8")) as Persona[];
@@ -94,7 +96,9 @@ const hub = new Hub({
     poke: (id) => scheduler.poke(id),
   }),
   serverInfo: () => ({ notifyConfigured: notifier.enabled, defaultFeeds: envFeeds?.length ? envFeeds : DEFAULT_FEEDS }),
+  allowRemoteAdmin: ALLOW_REMOTE_ADMIN,
 });
+console.log(ALLOW_REMOTE_ADMIN ? "[server] admin: allowed from any address (ADMIN_REMOTE=1)" : "[server] admin: only from this machine (SSH tunnel or scripts/admin.ts)");
 
 const NOTIFY_KINDS = new Set(["petition", "arrival", "season", "built", "death", "birth", "partners", "naming"]);
 onEvent((e) => {
@@ -151,7 +155,7 @@ app.get("/api/state", async () => hub.snapshot(false).state);
 
 app.get("/ws", { websocket: true }, (socket, req) => {
   const token = (req.query as Record<string, string | undefined>).token;
-  hub.add(socket, token);
+  hub.add(socket, token, req.socket.remoteAddress);
 });
 
 if (existsSync(CLIENT_DIST)) {
