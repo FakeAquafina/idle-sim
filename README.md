@@ -152,10 +152,14 @@ right size: 1 CPU, 1 GB RAM, 8 GB disk is plenty, it boots in a second and uses
 a few hundred MB at rest. A VM works too and avoids one tweak below, at the
 cost of RAM. A Raspberry Pi 4 or 5 is fine as well.
 
-**Reaching it from anywhere:** put Tailscale on the box and on your laptop or
-phone. In an unprivileged LXC, Tailscale needs the TUN device passed through;
-on the Proxmox host add these two lines to `/etc/pve/lxc/<id>.conf` and restart
-the container (a VM needs nothing):
+**Reaching it from anywhere:** the box only needs to be on your home network.
+If you already run a Tailscale subnet router (or exit node) at home, every
+device on your tailnet reaches the box by its LAN address, so nothing extra is
+installed in the container. Without one, install Tailscale on the box itself
+(`curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up`); in
+an unprivileged LXC that also needs the TUN device passed through, by adding
+these two lines to `/etc/pve/lxc/<id>.conf` on the Proxmox host and restarting
+the container:
 
 ```
 lxc.cgroup2.devices.allow: c 10:200 rwm
@@ -167,7 +171,7 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 On the box, once, as root: create your user and let it sudo, and allow SSH in.
 
 ```bash
-apt update && apt install -y sudo openssh-server curl
+apt update && apt install -y sudo openssh-server curl rsync
 adduser murph && usermod -aG sudo murph
 ```
 
@@ -194,16 +198,19 @@ deploy/push.sh murph@homebox
 
 ### Sharing the link
 
+On your tailnet the village is simply `http://<box-lan-ip>:3000` (traffic
+between tailnet devices is already encrypted). Friends need to be on your
+tailnet: invite them from the Tailscale admin console and make sure they are
+allowed the subnet route. For a tidy `https://` name, run on whichever machine
+has Tailscale (the subnet router works):
+
 ```bash
-sudo tailscale up
-sudo tailscale serve --bg 3000
+sudo tailscale serve --bg http://<box-lan-ip>:3000
 ```
 
-`tailscale serve` gives the village an `https://homebox.<tailnet>.ts.net`
-address that anyone on your tailnet can open; share the machine with friends
-from the Tailscale admin console, or use `tailscale funnel 3000` to make it
-public (viewers are read-only and capped at 25; only the admin token changes
-anything, so keep it off public links).
+`tailscale funnel` can make that public instead; viewers are read-only and
+capped at 25, and only the admin token changes anything, so keep the token off
+public links.
 
 ### Day to day on the box
 
