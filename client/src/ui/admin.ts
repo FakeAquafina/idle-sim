@@ -1,4 +1,7 @@
-import type { AdminCommand, Settings } from "@idle-sim/shared";
+// The admin bar: pause/speed/reset, gifts and whispers, and the settings panel.
+
+import type { AdminCommand, ServerInfo, Settings } from "@idle-sim/shared";
+import { setupSettings, updateSettingsPanel } from "./settings.ts";
 
 export function setupAdminBar(isAdmin: boolean, send: (cmd: AdminCommand) => void): void {
   const bar = document.getElementById("admin")!;
@@ -28,33 +31,16 @@ export function setupAdminBar(isAdmin: boolean, send: (cmd: AdminCommand) => voi
     const text = prompt("Whisper a rumor the villagers will talk about:");
     if (text?.trim()) send({ cmd: "rumor", text: text.trim() });
   };
-  document.getElementById("aiBtn")!.onclick = () => send({ cmd: "setAi", enabled: !currentAi() });
-  document.getElementById("budgetBtn")!.onclick = () => {
-    const v = Number(prompt("Max Claude spend in dollars per hour (0-20):", String(current.budgetUsdPerHour)));
-    if (Number.isFinite(v) && v >= 0) send({ cmd: "setBudget", usdPerHour: v });
-  };
-  document.getElementById("newsBtn")!.onclick = () => send({ cmd: "setNews", enabled: !current.newsEnabled });
-  document.getElementById("storyBtn")!.onclick = () => send({ cmd: "setBigMoments", enabled: !current.bigMomentsEnabled });
-  document.getElementById("popBtn")!.onclick = () => {
-    const v = Number(prompt("Stop arrivals and births once the village has this many people (2-30):", String(current.populationMax)));
-    if (Number.isFinite(v) && v >= 2) send({ cmd: "setPopulationMax", value: Math.floor(v) });
-  };
+  setupSettings(send);
 }
 
-let current: Settings = { aiEnabled: true, budgetUsdPerHour: 0.15, newsEnabled: true, bigMomentsEnabled: true, populationMax: 12 };
-const currentAi = () => current.aiEnabled;
-
-export function updateAdminSettings(settings: Settings): void {
-  current = settings;
-  const set = (id: string, text: string) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  };
-  set("aiBtn", `AI: ${settings.aiEnabled ? "on" : "off"}`);
-  set("budgetBtn", `$${settings.budgetUsdPerHour.toFixed(2)}/h`);
-  set("newsBtn", `News: ${settings.newsEnabled ? "on" : "off"}`);
-  set("storyBtn", `Chronicle: ${settings.bigMomentsEnabled ? "on" : "off"}`);
-  set("popBtn", `Pop ≤ ${settings.populationMax}`);
+export function updateAdminSettings(settings: Settings, server?: ServerInfo): void {
+  updateSettingsPanel(settings, server);
+  const btn = document.getElementById("settingsBtn");
+  if (btn) {
+    const off = [!settings.aiEnabled && "AI off", !settings.newsEnabled && "news off", !settings.bigMomentsEnabled && "chronicle off"].filter(Boolean);
+    btn.title = off.length ? `Settings (${off.join(", ")})` : "Settings";
+  }
 }
 
 export function showAdminMessage(ok: boolean, message?: string): void {

@@ -2,7 +2,7 @@
 
 import type { AdminCommand, ChronicleEntry, ClientMessage, DeltaMessage, ServerMessage, SnapshotMessage, WorldEvent } from "@idle-sim/shared";
 
-import type { AiStatus, Settings } from "@idle-sim/shared";
+import type { AiStatus, ServerInfo, Settings } from "@idle-sim/shared";
 
 export type MirrorState = SnapshotMessage["state"];
 
@@ -10,11 +10,13 @@ export class Mirror {
   state: MirrorState | null = null;
   settings: Settings | null = null;
   ai: AiStatus | null = null;
+  server: ServerInfo | null = null;
 
   applySnapshot(msg: SnapshotMessage): void {
     this.state = msg.state;
     this.settings = msg.settings;
     this.ai = msg.ai;
+    this.server = msg.server;
   }
 
   /** Returns true if any tiles changed (so the renderer can redraw terrain). */

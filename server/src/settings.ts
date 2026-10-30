@@ -10,6 +10,8 @@ export const DEFAULT_SETTINGS: Settings = {
   newsEnabled: true,
   bigMomentsEnabled: true,
   populationMax: 12,
+  newsFeeds: [],
+  notifyEnabled: true,
 };
 
 export function loadSettings(dir: string): Settings {

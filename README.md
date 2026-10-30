@@ -21,7 +21,19 @@ npm run dev                   # server on :3000, viewer on http://localhost:5173
 ```
 
 Open `http://localhost:5173/?token=YOUR_ADMIN_TOKEN` once to unlock the admin bar
-(pause, speed, reset). The token is remembered in that browser.
+(pause, speed, reset, gifts, whispers, settings). The token is remembered in
+that browser.
+
+## Watching
+
+The view is isometric: drag (or swipe) to pan, scroll or pinch to zoom, and the
+⌖ button jumps back to the storehouse. Hover anything for a tooltip; click a
+villager or a building to open the inspector (needs, bonds, memories, or who
+lives where and how a crop is doing). Clicking an entry in the event feed swings
+the camera to where it happened. Night darkens the map and fires and windows
+glow; rain, storms (with lightning) and snow fall over the scene. All of the
+art is drawn in code (`client/src/render/sprites.ts`), so there are no image
+files to manage; swap it for real sprites later without touching the sim.
 
 ## The land provides
 
@@ -94,12 +106,22 @@ minute).
 - **News.** About once an hour, headlines from public RSS feeds (BBC World, NPR,
   ScienceDaily by default; see `NEWS_FEEDS`) are filtered through a blocklist and
   retold by Claude as a traveller's garbled gossip, which villagers then talk
-  about. Switch off with the **News** admin button.
+  about. Switch off, or point at your own feeds, in **Settings**.
 - **The chronicle.** `claude-opus-5-5` writes a page at the end of each village
   day (when enough happened), plus obituaries, welcomes for newcomers and
   newborns, and names for the dock, mine, workshop, well, shrine and storehouse.
   Open it with the 📜 button. Opus calls are gated by the same hourly budget and
-  opt into the API's server-side refusal fallback. Switch off with **Chronicle**.
+  opt into the API's server-side refusal fallback. Switch off in **Settings**.
+
+## Admin settings
+
+The ⚙ **Settings** panel in the admin bar holds everything that can change at
+runtime, saved to `server/data/settings.json`: Claude on/off, the hourly spend
+cap, the population cap, the chronicle, outside news and its feed URLs, and
+phone notifications (which also need `NTFY_URL` or `DISCORD_WEBHOOK` on the
+server). The same switches are available as admin commands for the dev script
+below (`setAi`, `setBudget`, `setPopulationMax`, `setBigMoments`, `setNews`,
+`setNewsFeeds`, `setNotify`).
 
 ## Time
 

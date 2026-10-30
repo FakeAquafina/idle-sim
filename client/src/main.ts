@@ -1,13 +1,16 @@
-import { Application, Graphics } from "pixi.js";
-import { Mirror, connect } from "./net.ts";
+import { Application } from "pixi.js";
+import { STRUCTURES, type Vec2 } from "@idle-sim/shared";
+import { Mirror, type MirrorState, connect } from "./net.ts";
+import { Atmosphere } from "./render/atmosphere.ts";
 import { Camera } from "./render/camera.ts";
-import { TILE } from "./render/projection.ts";
-import { Scene } from "./render/scene.ts";
+import { projection } from "./render/projection.ts";
+import { type Pick, Scene } from "./render/scene.ts";
 import { highlightSpeed, setupAdminBar, showAdminMessage, updateAdminSettings } from "./ui/admin.ts";
 import { addChronicleEntry, resetChronicle, setupChronicle } from "./ui/chronicle.ts";
+import { addEvent, resetFeed, setupFeed } from "./ui/feed.ts";
 import { renderInbox, setupInbox } from "./ui/inbox.ts";
-import { addEvent, resetFeed } from "./ui/feed.ts";
-import { renderInspector, selectVillager } from "./ui/inspector.ts";
+import { describeGoal, esc, farmWord, onSelectionChange, renderInspector, select } from "./ui/inspector.ts";
+import { hideTooltip, showTooltip } from "./ui/tooltip.ts";
 import { updateAi, updateStatus, updateTopbar, updateViewers } from "./ui/topbar.ts";
 
 // Admin token comes from ?token=... once, then sticks in localStorage.
@@ -24,15 +27,42 @@ await app.init({ resizeTo: window, background: 0x12161b, antialias: false, resol
 document.getElementById("game")!.appendChild(app.canvas);
 
 const mirror = new Mirror();
-const scene = new Scene();
-const overlay = new Graphics();
-app.stage.addChild(scene.root, overlay);
+const scene = new Scene(app.renderer);
+const atmosphere = new Atmosphere();
+app.stage.addChild(scene.root, atmosphere.gfx);
 const camera = new Camera(app, scene.root);
-scene.setClickGuard(() => camera.dragDistance > 4);
-scene.onVillagerClick = (id) => selectVillager(id, mirror.state);
-document.getElementById("inspectorClose")!.onclick = () => selectVillager(null, null);
 setupChronicle();
+setupFeed(jumpTo);
+onSelectionChange((sel) => scene.setSelection(sel));
+document.getElementById("inspectorClose")!.onclick = () => select(null, null);
+document.getElementById("homeBtn")!.onclick = () => centerOnVillage();
 
+// ---- Pointer: hover shows a tooltip, a tap selects ------------------------------------
+app.stage.on("pointermove", (e) => {
+  if (e.pointerType !== "mouse" || camera.dragDistance > 4) {
+    hideTooltip();
+    return;
+  }
+  const local = scene.root.toLocal(e.global);
+  const p = scene.pick(local.x, local.y);
+  scene.setHover(p);
+  const text = p && mirror.state ? describePick(p, mirror.state) : null;
+  if (text) showTooltip(text, e.client.x, e.client.y);
+  else hideTooltip();
+});
+app.canvas.addEventListener("pointerleave", () => {
+  hideTooltip();
+  scene.setHover(null);
+});
+app.stage.on("pointertap", (e) => {
+  const local = scene.root.toLocal(e.global);
+  const p = scene.pick(local.x, local.y);
+  if (camera.dragDistance > 4) return;
+  if (p?.kind === "villager" || p?.kind === "structure") select(p, mirror.state);
+  else select(null, null);
+});
+
+// ---- Network -------------------------------------------------------------------------
 let firstSnapshot = true;
 const conn = connect(token, {
   onSnapshot(msg) {
@@ -45,12 +75,12 @@ const conn = connect(token, {
     setupAdminBar(msg.isAdmin, (cmd) => conn.sendAdmin(cmd));
     setupInbox(msg.isAdmin, (cmd) => conn.sendAdmin(cmd));
     highlightSpeed(s.speed, s.paused);
-    updateAdminSettings(msg.settings);
+    updateAdminSettings(msg.settings, msg.server);
     updateAi(msg.ai);
     renderInbox(s.petitions);
     resetChronicle(s.chronicle ?? []);
     if (firstSnapshot) {
-      camera.fit(s.width * TILE, s.height * TILE);
+      centerOnVillage();
       firstSnapshot = false;
     }
   },
@@ -74,21 +104,80 @@ const conn = connect(token, {
 });
 
 app.ticker.add((ticker) => {
-  scene.animate(ticker.deltaTime);
-  drawOverlay();
+  const now = performance.now();
+  scene.animate(ticker.deltaTime, now);
+  atmosphere.update(now, mirror.state, app.screen.width, app.screen.height, scene.lights(), (x, y) => scene.root.toGlobal({ x, y }), camera.scale);
 });
 
-/** Night darkening and weather tint over the whole screen. */
-function drawOverlay() {
-  overlay.clear();
+// ---- Camera helpers ---------------------------------------------------------------------
+/** Look at the storehouse (the village grows around it), zoomed in enough to see faces. */
+function centerOnVillage(): void {
   const s = mirror.state;
   if (!s) return;
-  const t = s.clock.timeOfDay;
-  // Darkness peaks at midnight (t=0), fades out by ~06:00 and in from ~20:00.
-  const night = t < 0.25 ? 1 - t / 0.25 : t > 0.8 ? (t - 0.8) / 0.2 : 0;
-  if (night > 0) overlay.rect(0, 0, app.screen.width, app.screen.height).fill({ color: 0x0a1030, alpha: 0.5 * night });
-  const w = s.clock.weather;
-  if (w === "rain") overlay.rect(0, 0, app.screen.width, app.screen.height).fill({ color: 0x3a4a66, alpha: 0.18 });
-  if (w === "storm") overlay.rect(0, 0, app.screen.width, app.screen.height).fill({ color: 0x222a3a, alpha: 0.35 });
-  if (w === "snow") overlay.rect(0, 0, app.screen.width, app.screen.height).fill({ color: 0xffffff, alpha: 0.14 });
+  const store = s.structures.find((x) => x.kind === "storehouse");
+  const c = store ? projection.toScreen(store.x + store.w / 2, store.y + store.h / 2) : projection.toScreen(s.width / 2, s.height / 2);
+  camera.centerOn(c.x, c.y, window.innerWidth > 900 ? 1.6 : 1.1);
+}
+
+let jumpTimer: ReturnType<typeof setTimeout> | null = null;
+function jumpTo(target: { pos?: Vec2; villagerId?: string }): void {
+  const s = mirror.state;
+  if (!s) return;
+  let p: { x: number; y: number } | null = null;
+  let pick: Pick | null = null;
+  if (target.villagerId) {
+    p = scene.villagerPosition(target.villagerId);
+    if (p) pick = { kind: "villager", id: target.villagerId };
+  }
+  if (!p && target.pos) {
+    p = projection.toScreen(target.pos.x + 0.5, target.pos.y + 0.5);
+    pick = { kind: "tile", x: target.pos.x, y: target.pos.y };
+  }
+  if (!p) return;
+  camera.centerOn(p.x, p.y, Math.max(camera.scale, 1.6));
+  scene.setHover(pick);
+  if (jumpTimer) clearTimeout(jumpTimer);
+  jumpTimer = setTimeout(() => scene.setHover(null), 1800);
+}
+
+// ---- Tooltip text -------------------------------------------------------------------------
+function describePick(p: Pick, s: MirrorState): string | null {
+  switch (p.kind) {
+    case "villager": {
+      const v = s.villagers.find((x) => x.id === p.id);
+      if (!v) return null;
+      return `<b>${esc(v.name)}</b> <span class="muted">${v.stage}, ${esc(v.skill)}</span><br>${esc(describeGoal(v))}${v.speech ? `<br><i>“${esc(v.speech.text)}”</i>` : ""}`;
+    }
+    case "animal": {
+      const a = (s.animals ?? []).find((x) => x.id === p.id);
+      if (!a) return null;
+      return a.kind === "deer" ? "a wild deer" : a.tame ? "a village goat" : "a wild goat";
+    }
+    case "structure": {
+      const st = s.structures.find((x) => x.id === p.id);
+      if (!st) return null;
+      const def = STRUCTURES[st.kind];
+      const title = `<b>${esc(st.name ?? def.label)}</b>${st.name ? ` <span class="muted">${def.label.toLowerCase()}</span>` : ""}`;
+      if (!st.built) return `${title}<br>${Math.round(st.progress * 100)}% built`;
+      if (st.kind === "house") {
+        const who = st.ownerIds.map((id) => s.villagers.find((v) => v.id === id)?.name).filter(Boolean);
+        return `${title}<br>${who.length ? `home of ${who.map((n) => esc(n!)).join(" and ")}` : "empty"}`;
+      }
+      if (st.kind === "farm") return `${title}<br>${farmWord(st.growth)}`;
+      if (st.kind === "mine" && st.reserve) return `${title}<br>${st.depleted ? "worked out" : `${st.reserve.stone} stone, ${st.reserve.ore} ore left`}`;
+      if (st.kind === "pen") return `${title}<br>${(s.animals ?? []).filter((a) => a.alive && a.penId === st.id).length} goats`;
+      return title;
+    }
+    case "tile": {
+      const t = s.tiles[p.y * s.width + p.x];
+      if (!t) return null;
+      switch (t.kind) {
+        case "forest": return `forest <span class="muted">· ${t.amount} wood</span>`;
+        case "rock": return `rock <span class="muted">· ${t.amount} stone</span>`;
+        case "ore": return `ore vein <span class="muted">· ${t.amount} ore</span>`;
+        case "water": return s.coast ? "the sea" : "water";
+        default: return t.kind;
+      }
+    }
+  }
 }

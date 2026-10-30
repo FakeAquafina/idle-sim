@@ -246,6 +246,10 @@ export interface Settings {
   bigMomentsEnabled: boolean;
   /** No arrivals or births once the village reaches this many living villagers. */
   populationMax: number;
+  /** RSS/Atom feed URLs for travellers' news. Empty = the server's defaults. */
+  newsFeeds: string[];
+  /** Send phone notifications (needs NTFY_URL or DISCORD_WEBHOOK on the server). */
+  notifyEnabled: boolean;
 }
 
 /** AI status shared with viewers. */

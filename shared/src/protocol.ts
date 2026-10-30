@@ -13,6 +13,15 @@ export interface SnapshotMessage {
   isAdmin: boolean;
   settings: Settings;
   ai: AiStatus;
+  /** Facts about the server a viewer cannot change but the admin panel shows. */
+  server: ServerInfo;
+}
+
+export interface ServerInfo {
+  /** True when NTFY_URL or DISCORD_WEBHOOK is set. */
+  notifyConfigured: boolean;
+  /** Feeds used when the newsFeeds setting is empty. */
+  defaultFeeds: string[];
 }
 
 export interface DeltaMessage {
@@ -68,7 +77,9 @@ export type AdminCommand =
   | { cmd: "setBudget"; usdPerHour: number }
   | { cmd: "setNews"; enabled: boolean }
   | { cmd: "setBigMoments"; enabled: boolean }
-  | { cmd: "setPopulationMax"; value: number };
+  | { cmd: "setPopulationMax"; value: number }
+  | { cmd: "setNewsFeeds"; feeds: string[] }
+  | { cmd: "setNotify"; enabled: boolean };
 
 export interface AdminMessage {
   type: "admin";

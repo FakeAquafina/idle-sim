@@ -236,7 +236,7 @@ describe("memory, chronicle, news, admin", () => {
 
   it("admin can change the new settings within bounds", () => {
     const w = world();
-    const settings = { aiEnabled: true, budgetUsdPerHour: 0.15, newsEnabled: true, bigMomentsEnabled: true, populationMax: 12 };
+    const settings = { aiEnabled: true, budgetUsdPerHour: 0.15, newsEnabled: true, bigMomentsEnabled: true, populationMax: 12, newsFeeds: [], notifyEnabled: true };
     let saved = 0;
     const ctx = { world: w, settings, reset: () => {}, saveSettings: () => saved++, pickNewcomer: () => null, poke: () => {} };
     expect(runAdminCommand({ cmd: "setNews", enabled: false }, ctx).ok).toBe(true);
@@ -245,7 +245,12 @@ describe("memory, chronicle, news, admin", () => {
     expect(runAdminCommand({ cmd: "setPopulationMax", value: 8 }, ctx).ok).toBe(true);
     expect(settings.populationMax).toBe(8);
     expect(runAdminCommand({ cmd: "setBigMoments", enabled: false }, ctx).ok).toBe(true);
-    expect(saved).toBe(3);
+    expect(runAdminCommand({ cmd: "setNewsFeeds", feeds: ["ftp://nope", "https://ok.example/rss"] }, ctx).ok).toBe(false);
+    expect(runAdminCommand({ cmd: "setNewsFeeds", feeds: [" https://ok.example/rss ", ""] }, ctx).ok).toBe(true);
+    expect(settings.newsFeeds).toEqual(["https://ok.example/rss"]);
+    expect(runAdminCommand({ cmd: "setNotify", enabled: false }, ctx).ok).toBe(true);
+    expect(settings.notifyEnabled).toBe(false);
+    expect(saved).toBe(5);
   });
 
   it("the sim stops growing the village past the cap it is given", () => {

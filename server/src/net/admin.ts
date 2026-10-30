@@ -10,6 +10,17 @@ export function tokenMatches(given: string | undefined, expected: string): boole
   return timingSafeEqual(a, b);
 }
 
+export const MAX_FEEDS = 10;
+
+function isHttpUrl(s: string): boolean {
+  try {
+    const u = new URL(s);
+    return (u.protocol === "http:" || u.protocol === "https:") && s.length <= 300;
+  } catch {
+    return false;
+  }
+}
+
 export const MIN_SPEED = 0.25;
 export const MAX_SPEED = 200;
 
@@ -100,6 +111,19 @@ export function runAdminCommand(cmd: AdminCommand, ctx: AdminContext): { ok: boo
       ctx.saveSettings();
       return { ok: true, message: `Population cap ${v}` };
     }
+    case "setNewsFeeds": {
+      const feeds = Array.isArray(cmd.feeds) ? cmd.feeds.map((f) => String(f).trim()).filter(Boolean) : null;
+      if (!feeds || feeds.length > MAX_FEEDS) return { ok: false, message: `Give up to ${MAX_FEEDS} feed URLs` };
+      const bad = feeds.find((f) => !isHttpUrl(f));
+      if (bad) return { ok: false, message: `Not a web address: ${bad.slice(0, 40)}` };
+      ctx.settings.newsFeeds = feeds;
+      ctx.saveSettings();
+      return { ok: true, message: feeds.length ? `${feeds.length} news feed(s)` : "Default news feeds" };
+    }
+    case "setNotify":
+      ctx.settings.notifyEnabled = !!cmd.enabled;
+      ctx.saveSettings();
+      return { ok: true, message: ctx.settings.notifyEnabled ? "Notifications on" : "Notifications off" };
     default:
       return { ok: false, message: "Unknown command" };
   }

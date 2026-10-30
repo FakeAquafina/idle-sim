@@ -33,7 +33,7 @@ const { ConversationBrain } = await import("./brain/converse.ts");
 const { MemoryBrain } = await import("./brain/memory.ts");
 const { PopulationBrain } = await import("./brain/population.ts");
 const { MomentsBrain } = await import("./brain/moments.ts");
-const { NewsBrain } = await import("./news.ts");
+const { NewsBrain, DEFAULT_FEEDS } = await import("./news.ts");
 const { onChronicle } = await import("./sim/chronicle.ts");
 type Persona = import("./sim/villager.ts").Persona;
 
@@ -65,9 +65,10 @@ new ConversationBrain(brainDeps); // registers itself as the handler for village
 const memoryBrain = new MemoryBrain(brainDeps);
 const populationBrain = new PopulationBrain({ ...brainDeps, pool: newcomerPool });
 const moments = new MomentsBrain(brainDeps);
+const envFeeds = process.env.NEWS_FEEDS?.split(",").map((f) => f.trim()).filter(Boolean);
 const news = new NewsBrain({
   ...brainDeps,
-  feeds: process.env.NEWS_FEEDS?.split(",").map((f) => f.trim()).filter(Boolean),
+  feeds: envFeeds?.length ? envFeeds : undefined,
   blocklist: process.env.NEWS_BLOCKLIST ? process.env.NEWS_BLOCKLIST.split(",").map((b) => b.trim()).filter(Boolean) : undefined,
 });
 console.log(client ? `[brain] Claude enabled (cap $${settings.budgetUsdPerHour}/hour)` : "[brain] no ANTHROPIC_API_KEY: villagers run on autopilot");
@@ -92,13 +93,14 @@ const hub = new Hub({
     pickNewcomer: () => newcomerPool.find((p) => !world.villagers.some((v) => v.name === p.name)) ?? null,
     poke: (id) => scheduler.poke(id),
   }),
+  serverInfo: () => ({ notifyConfigured: notifier.enabled, defaultFeeds: envFeeds?.length ? envFeeds : DEFAULT_FEEDS }),
 });
 
 const NOTIFY_KINDS = new Set(["petition", "arrival", "season", "built", "death", "birth", "partners", "naming"]);
 onEvent((e) => {
   hub.broadcastEvent(e);
   appendEventLog(DATA_DIR, e);
-  if (NOTIFY_KINDS.has(e.kind)) notifier.send(e.text);
+  if (settings.notifyEnabled && NOTIFY_KINDS.has(e.kind)) notifier.send(e.text);
   moments.onEvent(e);
 });
 onChronicle((entry) => hub.broadcastChronicle(entry));
@@ -120,7 +122,7 @@ setInterval(() => {
 
 setInterval(() => hub.broadcastDelta(), 200);
 setInterval(() => saveWorld(DATA_DIR, world), 30_000);
-setInterval(() => scheduler.check(() => notifier.send("Hourly Claude budget reached; villagers are on autopilot until it resets.")), 1000);
+setInterval(() => scheduler.check(() => settings.notifyEnabled && notifier.send("Hourly Claude budget reached; villagers are on autopilot until it resets.")), 1000);
 setInterval(() => {
   memoryBrain.check();
   populationBrain.check();

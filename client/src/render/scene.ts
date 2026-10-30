@@ -1,107 +1,283 @@
-// Draws the world from the mirrored state. Placeholder shapes for now.
+// Draws the world from the mirrored state. Four layers, back to front:
+//   ground   one big Graphics of tile diamonds (redrawn only when tiles change)
+//   hover    the highlighted tile or footprint under the pointer / selection
+//   objects  trees, rocks, buildings, villagers, animals, depth-sorted every frame
+//   labels   names and speech bubbles, never hidden behind a building
 
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, type Renderer, Sprite, Text } from "pixi.js";
 import { STRUCTURES, type Animal, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
-import { TILE, projection } from "./projection.ts";
+import { TILE_H, TILE_W, footprint, projection } from "./projection.ts";
+import {
+  bakeDecor,
+  drawAnimal,
+  drawFlame,
+  drawGroundTile,
+  drawStructure,
+  drawVillager,
+  footprintCenter,
+  hash,
+  lookFor,
+  makeSprite,
+  structureHeight,
+  villagerHeight,
+  type DecorSet,
+} from "./sprites.ts";
 
-const TILE_COLORS: Record<Tile["kind"], number> = {
-  grass: 0x4f8a3b,
-  dirt: 0x8a6a3b,
-  water: 0x2f5f9e,
-  sand: 0xd6c587,
-  forest: 0x2f6b2a,
-  rock: 0x6f7378,
-  ore: 0x5c4f6e,
-  farmland: 0x6e4b2a,
-};
+export type Pick =
+  | { kind: "villager"; id: string }
+  | { kind: "structure"; id: string }
+  | { kind: "animal"; id: string }
+  | { kind: "tile"; x: number; y: number };
 
-interface AnimalLook {
-  root: Container;
-  gfx: Graphics;
-  target: { x: number; y: number };
+export interface Light {
+  x: number;
+  y: number;
+  color: number;
+  radius: number;
+  strength: number;
+}
+
+interface Decor {
+  sprite: Sprite;
   key: string;
 }
 
 interface StructureView {
   root: Container;
   gfx: Graphics;
+  flame: Graphics | null;
   label: Text;
   key: string;
+  s: Structure;
 }
 
-interface VillagerLook {
+interface Mover {
   root: Container;
-  body: Graphics;
-  name: Text;
-  bubble: Container;
-  bubbleBg: Graphics;
-  bubbleText: Text;
+  gfx: Graphics;
   target: { x: number; y: number };
   key: string;
 }
 
+interface VillagerLook extends Mover {
+  name: Text;
+  bubble: Container;
+  bubbleBg: Graphics;
+  bubbleText: Text;
+  height: number;
+}
+
+const LABEL_STYLE = { fontSize: 9, fill: 0xffffff, fontFamily: "ui-monospace, Menlo, monospace", stroke: { color: 0x101418, width: 2 } };
+
 export class Scene {
   readonly root = new Container();
-  private tiles = new Graphics();
-  private structureLayer = new Container();
-  private villagerLayer = new Container();
-  private animalLayer = new Container();
+  private ground = new Graphics();
+  private hover = new Graphics();
+  private objects = new Container();
+  private labels = new Container();
+  private decor = new Map<number, Decor>();
   private structureViews = new Map<string, StructureView>();
   private villagerViews = new Map<string, VillagerLook>();
-  private animalViews = new Map<string, AnimalLook>();
-  onVillagerClick: ((id: string) => void) | null = null;
-  private shouldIgnoreClick: () => boolean = () => false;
+  private animalViews = new Map<string, Mover>();
+  private textures: DecorSet;
+  private selection: Pick | null = null;
+  private hovered: Pick | null = null;
+  state: MirrorState | null = null;
 
-  constructor() {
-    this.villagerLayer.sortableChildren = true;
-    this.root.addChild(this.tiles, this.structureLayer, this.animalLayer, this.villagerLayer);
+  constructor(renderer: Renderer) {
+    this.textures = bakeDecor(renderer);
+    this.objects.sortableChildren = true;
+    this.root.addChild(this.ground, this.hover, this.objects, this.labels);
   }
 
-  setClickGuard(fn: () => boolean) {
-    this.shouldIgnoreClick = fn;
-  }
+  // ---- Building the scene -----------------------------------------------------
 
   rebuildAll(state: MirrorState): void {
-    this.drawTiles(state);
-    this.structureLayer.removeChildren();
+    this.state = state;
+    for (const d of this.decor.values()) d.sprite.destroy();
+    this.decor.clear();
+    for (const v of this.structureViews.values()) v.root.destroy({ children: true });
     this.structureViews.clear();
-    this.villagerLayer.removeChildren();
+    for (const v of this.villagerViews.values()) {
+      v.root.destroy({ children: true });
+      v.bubble.destroy({ children: true });
+      v.name.destroy();
+    }
     this.villagerViews.clear();
-    this.animalLayer.removeChildren();
+    for (const v of this.animalViews.values()) v.root.destroy({ children: true });
     this.animalViews.clear();
+    this.drawTiles(state);
     this.update(state, true);
   }
 
+  /** Redraw the ground and refresh trees/rocks. Cheap enough to call whenever tiles change. */
   drawTiles(state: MirrorState): void {
-    const g = this.tiles;
+    this.state = state;
+    const g = this.ground;
     g.clear();
     for (let y = 0; y < state.height; y++) {
       for (let x = 0; x < state.width; x++) {
         const t = state.tiles[y * state.width + x];
-        const p = projection.toScreen(x, y);
-        g.rect(p.x, p.y, TILE, TILE).fill(TILE_COLORS[t.kind]);
-        if (t.kind === "forest") {
-          g.circle(p.x + TILE / 2, p.y + TILE / 2, 3 + Math.min(3, t.amount / 5)).fill(0x1f4d1c);
-        } else if (t.kind === "rock") {
-          g.rect(p.x + 4, p.y + 5, TILE - 8, TILE - 9).fill(0x9a9ea3);
-        } else if (t.kind === "ore") {
-          g.rect(p.x + 4, p.y + 5, TILE - 8, TILE - 9).fill(0x8d7fa6);
-          g.rect(p.x + 7, p.y + 7, 3, 3).fill(0xe6d27a);
-        } else if (t.kind === "water") {
-          if ((x * 7 + y * 13) % 5 === 0) g.rect(p.x + 3, p.y + 8, 6, 1).fill({ color: 0x6f9bd1, alpha: 0.7 });
-        } else if (t.kind === "sand") {
-          if ((x * 3 + y * 11) % 7 === 0) g.rect(p.x + 5, p.y + 6, 2, 2).fill(0xbfae72);
-        }
+        const p = projection.toScreen(x + 0.5, y + 0.5);
+        drawGroundTile(g, p.x, p.y, t, x, y);
+        this.syncDecor(x, y, t, state.width);
       }
     }
   }
 
+  private syncDecor(x: number, y: number, t: Tile, width: number): void {
+    const i = y * width + x;
+    const key = decorKey(t);
+    const existing = this.decor.get(i);
+    if (existing?.key === key) return;
+    if (existing) {
+      existing.sprite.destroy();
+      this.decor.delete(i);
+    }
+    if (!key) return;
+    const h = hash(x, y, 7);
+    const big = t.amount >= 7;
+    const tex = t.kind === "forest" ? this.textures.trees[h % 2][big ? 1 : 0] : t.kind === "rock" ? this.textures.rock[big ? 1 : 0] : this.textures.ore[big ? 1 : 0];
+    const sprite = makeSprite(tex);
+    // Nudge within the tile so forests don't look like a grid.
+    const jx = ((h >> 4) % 7) - 3;
+    const jy = ((h >> 8) % 3) - 1;
+    const p = projection.toScreen(x + 0.5, y + 0.5);
+    sprite.position.set(p.x + jx, p.y + jy);
+    sprite.zIndex = projection.depth(x + 0.5, y + 0.5);
+    this.objects.addChild(sprite);
+    this.decor.set(i, { sprite, key });
+  }
+
   update(state: MirrorState, snap = false): void {
+    this.state = state;
     this.updateStructures(state.structures);
     this.updateVillagers(state.villagers, snap);
     this.updateAnimals(state.animals ?? [], snap);
+    this.drawHover();
   }
+
+  // ---- Structures -----------------------------------------------------------------
+
+  private updateStructures(structures: Structure[]): void {
+    const seen = new Set<string>();
+    for (const s of structures) {
+      seen.add(s.id);
+      let view = this.structureViews.get(s.id);
+      if (!view) {
+        const root = new Container();
+        const gfx = new Graphics();
+        const label = new Text({ text: "", style: LABEL_STYLE, resolution: 2 });
+        label.anchor.set(0.5, 1);
+        root.addChild(gfx);
+        this.labels.addChild(label);
+        this.objects.addChild(root);
+        view = { root, gfx, flame: null, label, key: "", s };
+        this.structureViews.set(s.id, view);
+      }
+      view.s = s;
+      const key = `${s.built}|${s.progress.toFixed(2)}|${s.growth?.toFixed(2) ?? "-"}|${s.name ?? ""}|${s.depleted ?? false}`;
+      if (view.key === key) continue;
+      view.key = key;
+      this.drawStructureView(view, s);
+    }
+    for (const [id, view] of this.structureViews) {
+      if (!seen.has(id)) {
+        view.root.destroy({ children: true });
+        view.label.destroy();
+        this.structureViews.delete(id);
+      }
+    }
+  }
+
+  private drawStructureView(view: StructureView, s: Structure): void {
+    const def = STRUCTURES[s.kind];
+    const p = projection.toScreen(s.x, s.y);
+    view.root.position.set(p.x, p.y);
+    view.gfx.clear();
+    drawStructure(view.gfx, s, def);
+    const height = structureHeight(s.kind, s.built);
+    // Tall things sort by their front corner, flat things sit just under whatever stands on them.
+    view.root.zIndex = height > 0 ? projection.depth(s.x + s.w, s.y + s.h) - 0.5 : projection.depth(s.x, s.y) - 0.5;
+
+    if (s.built && s.kind === "campfire" && !view.flame) {
+      view.flame = new Graphics();
+      view.root.addChild(view.flame);
+    }
+    view.label.text = s.name ?? def.label;
+    view.label.position.set(p.x, p.y - height - 4);
+    view.label.visible = s.built && s.kind !== "farm" && s.kind !== "pen";
+  }
+
+  // ---- Villagers ------------------------------------------------------------------
+
+  private updateVillagers(villagers: VillagerView[], snap: boolean): void {
+    const seen = new Set<string>();
+    for (const v of villagers) {
+      if (!v.alive) continue;
+      seen.add(v.id);
+      let look = this.villagerViews.get(v.id);
+      if (!look) {
+        look = this.createVillagerLook(v);
+        this.villagerViews.set(v.id, look);
+        snap = true;
+      }
+      const p = projection.toScreen(v.pos.x, v.pos.y);
+      look.target = p;
+      if (snap) look.root.position.set(p.x, p.y);
+
+      const resting = v.goal?.type === "rest";
+      const key = `${v.stage}|${v.speech?.text ?? ""}|${resting}`;
+      if (look.key !== key) {
+        look.key = key;
+        look.height = villagerHeight(v.stage);
+        look.gfx.clear();
+        drawVillager(look.gfx, lookFor(v.id, v.stage, resting));
+        if (v.speech) {
+          look.bubbleText.text = v.speech.text;
+          const bw = Math.ceil(look.bubbleText.width) + 8;
+          const bh = Math.ceil(look.bubbleText.height) + 4;
+          look.bubbleBg.clear();
+          look.bubbleBg.roundRect(-bw / 2, -bh, bw, bh, 3).fill({ color: 0xfaf6ee, alpha: 0.95 });
+          look.bubbleBg.poly([-3, 0, 3, 0, 0, 3]).fill({ color: 0xfaf6ee, alpha: 0.95 });
+          look.bubbleText.position.set(-bw / 2 + 4, -bh + 2);
+          look.bubble.visible = true;
+        } else {
+          look.bubble.visible = false;
+        }
+      }
+    }
+    for (const [id, look] of this.villagerViews) {
+      if (!seen.has(id)) {
+        look.root.destroy({ children: true });
+        look.bubble.destroy({ children: true });
+        look.name.destroy();
+        this.villagerViews.delete(id);
+      }
+    }
+  }
+
+  private createVillagerLook(v: VillagerView): VillagerLook {
+    const root = new Container();
+    const gfx = new Graphics();
+    root.addChild(gfx);
+    this.objects.addChild(root);
+    const name = new Text({ text: v.name, style: LABEL_STYLE, resolution: 2 });
+    name.anchor.set(0.5, 1);
+    const bubble = new Container();
+    const bubbleBg = new Graphics();
+    const bubbleText = new Text({
+      text: "",
+      style: { fontSize: 9, fill: 0x222222, fontFamily: "ui-monospace, Menlo, monospace", wordWrap: true, wordWrapWidth: 130 },
+      resolution: 2,
+    });
+    bubble.addChild(bubbleBg, bubbleText);
+    bubble.visible = false;
+    this.labels.addChild(name, bubble);
+    return { root, gfx, name, bubble, bubbleBg, bubbleText, target: { x: 0, y: 0 }, key: "", height: villagerHeight(v.stage) };
+  }
+
+  // ---- Animals --------------------------------------------------------------------
 
   private updateAnimals(animals: Animal[], snap: boolean): void {
     const seen = new Set<string>();
@@ -113,7 +289,7 @@ export class Scene {
         const root = new Container();
         const gfx = new Graphics();
         root.addChild(gfx);
-        this.animalLayer.addChild(root);
+        this.objects.addChild(root);
         look = { root, gfx, target: { x: 0, y: 0 }, key: "" };
         this.animalViews.set(a.id, look);
         snap = true;
@@ -124,16 +300,8 @@ export class Scene {
       const key = `${a.kind}|${a.tame}`;
       if (look.key !== key) {
         look.key = key;
-        const g = look.gfx;
-        g.clear();
-        if (a.kind === "deer") {
-          g.ellipse(0, 0, 5, 3.2).fill(0x8a5a2b).stroke({ color: 0x3a240f, width: 1 });
-          g.rect(3, -5, 1, 3).fill(0x3a240f);
-          g.rect(5, -5, 1, 3).fill(0x3a240f);
-        } else {
-          g.ellipse(0, 0, 4.2, 3).fill(a.tame ? 0xf3ecd8 : 0xd9cfb4).stroke({ color: 0x4a4030, width: 1 });
-          g.rect(-5, -2, 2, 2).fill(0x4a4030);
-        }
+        look.gfx.clear();
+        drawAnimal(look.gfx, a.kind, a.tame);
       }
     }
     for (const [id, look] of this.animalViews) {
@@ -144,182 +312,131 @@ export class Scene {
     }
   }
 
-  private updateStructures(structures: Structure[]): void {
-    const seen = new Set<string>();
-    for (const s of structures) {
-      seen.add(s.id);
-      let view = this.structureViews.get(s.id);
-      if (!view) {
-        const root = new Container();
-        const gfx = new Graphics();
-        const label = new Text({ text: "", style: { fontSize: 8, fill: 0xffffff, fontFamily: "monospace" } });
-        label.anchor.set(0.5, 1);
-        root.addChild(gfx, label);
-        this.structureLayer.addChild(root);
-        view = { root, gfx, label, key: "" };
-        this.structureViews.set(s.id, view);
-      }
-      const key = `${s.built}|${s.progress.toFixed(3)}|${s.growth?.toFixed(2) ?? "-"}|${s.name ?? ""}`;
-      if (view.key === key) continue;
-      view.key = key;
-      this.drawStructure(view, s);
-    }
-    for (const [id, view] of this.structureViews) {
-      if (!seen.has(id)) {
-        view.root.destroy({ children: true });
-        this.structureViews.delete(id);
-      }
-    }
-  }
+  // ---- Per-frame -------------------------------------------------------------------
 
-  private drawStructure(view: StructureView, s: Structure): void {
-    const def = STRUCTURES[s.kind];
-    const p = projection.toScreen(s.x, s.y);
-    const w = s.w * TILE;
-    const h = s.h * TILE;
-    const g = view.gfx;
-    g.clear();
-    view.root.position.set(p.x, p.y);
-
-    if (!s.built) {
-      g.rect(1, 1, w - 2, h - 2).fill({ color: def.color, alpha: 0.25 }).stroke({ color: def.color, width: 1, alpha: 0.9 });
-      g.rect(2, h - 5, (w - 4) * s.progress, 3).fill(0xe0a458);
-    } else if (s.kind === "farm") {
-      const growth = s.growth;
-      const color = growth === undefined ? 0x6e4b2a : growth >= 1 ? 0xd4b24a : lerpColor(0x7a5c2e, 0x5aa83a, growth);
-      g.rect(0, 0, w, h).fill(color);
-      for (let i = 0; i < s.w * 2; i++) g.rect(i * (TILE / 2) + 2, 0, 1, h).fill({ color: 0x3f2d16, alpha: 0.5 });
-    } else {
-      g.rect(0, 0, w, h).fill(def.color).stroke({ color: 0x000000, width: 1, alpha: 0.35 });
-      if (s.kind === "house") g.poly([0, 0, w / 2, -5, w, 0]).fill(0x8b3a2a);
-      if (s.kind === "dock") {
-        g.clear();
-        g.rect(0, 2, w, h - 4).fill(0x9c7a4a).stroke({ color: 0x4a3418, width: 1 });
-        for (let i = 4; i < w; i += 6) g.rect(i, 1, 1, h - 2).fill(0x5a3f1e);
-      }
-      if (s.kind === "mine") {
-        g.rect(w / 2 - 5, h / 2 - 3, 10, 8).fill(0x1d1a22);
-        g.poly([w / 2 - 7, h / 2 - 3, w / 2, h / 2 - 8, w / 2 + 7, h / 2 - 3]).fill(0x6b5a3a);
-        if (s.depleted) g.rect(w / 2 - 6, h / 2 - 1, 12, 2).fill(0x8a7a5a);
-      }
-      if (s.kind === "pen") {
-        g.clear();
-        g.rect(0, 0, w, h).fill(0x6b8a3b);
-        g.rect(0, 0, w, h).stroke({ color: 0x8a6a3b, width: 2 });
-        for (let i = 6; i < w; i += 8) g.rect(i, -1, 1, 3).fill(0x5a3f1e).rect(i, h - 2, 1, 3).fill(0x5a3f1e);
-      }
-      if (s.kind === "workshop") g.rect(w / 2 - 2, -4, 4, 5).fill(0x3a3a3a);
-      if (s.kind === "campfire") g.circle(w / 2, h / 2, 4).fill(0xffd166);
-      if (s.kind === "shrine") g.circle(w / 2, h / 2, 3).fill(0xffffff);
-      if (s.kind === "well") g.circle(w / 2, h / 2, 4).fill(0x1d3b5c);
-    }
-    view.label.text = s.name ?? def.label;
-    view.label.position.set(w / 2, -2);
-    view.label.visible = s.built && s.kind !== "farm";
-  }
-
-  private updateVillagers(villagers: VillagerView[], snap: boolean): void {
-    const seen = new Set<string>();
-    for (const v of villagers) {
-      if (!v.alive) continue;
-      seen.add(v.id);
-      let look = this.villagerViews.get(v.id);
-      if (!look) {
-        look = this.createVillagerLook(v);
-        this.villagerViews.set(v.id, look);
-        this.villagerLayer.addChild(look.root);
-        snap = true;
-      }
-      const p = projection.toScreen(v.pos.x, v.pos.y);
-      look.target = p;
-      if (snap) look.root.position.set(p.x, p.y);
-
-      const key = `${v.stage}|${v.speech?.text ?? ""}|${v.goal?.type ?? ""}`;
-      if (look.key !== key) {
-        look.key = key;
-        this.drawVillagerBody(look, v);
-        if (v.speech) {
-          look.bubbleText.text = v.speech.text;
-          const bw = look.bubbleText.width + 8;
-          const bh = look.bubbleText.height + 4;
-          look.bubbleBg.clear().roundRect(-bw / 2, -bh, bw, bh, 3).fill({ color: 0xfaf6ee, alpha: 0.95 });
-          look.bubbleText.position.set(-bw / 2 + 4, -bh + 2);
-          look.bubble.visible = true;
-        } else {
-          look.bubble.visible = false;
-        }
-      }
-    }
-    for (const [id, look] of this.villagerViews) {
-      if (!seen.has(id)) {
-        look.root.destroy({ children: true });
-        this.villagerViews.delete(id);
-      }
-    }
-  }
-
-  private createVillagerLook(v: VillagerView): VillagerLook {
-    const root = new Container();
-    const body = new Graphics();
-    const name = new Text({ text: v.name, style: { fontSize: 8, fill: 0xffffff, fontFamily: "monospace" } });
-    name.anchor.set(0.5, 1);
-    name.position.set(0, -7);
-    const bubble = new Container();
-    const bubbleBg = new Graphics();
-    const bubbleText = new Text({ text: "", style: { fontSize: 8, fill: 0x222222, fontFamily: "monospace", wordWrap: true, wordWrapWidth: 120 } });
-    bubble.addChild(bubbleBg, bubbleText);
-    bubble.position.set(0, -16);
-    bubble.visible = false;
-    root.addChild(body, name, bubble);
-    root.eventMode = "static";
-    root.cursor = "pointer";
-    root.on("pointertap", () => {
-      if (!this.shouldIgnoreClick()) this.onVillagerClick?.(v.id);
-    });
-    return { root, body, name, bubble, bubbleBg, bubbleText, target: { x: 0, y: 0 }, key: "" };
-  }
-
-  private drawVillagerBody(look: VillagerLook, v: VillagerView): void {
-    const g = look.body;
-    g.clear();
-    const r = v.stage === "child" ? 3.5 : 5;
-    const color = colorFromId(v.id);
-    g.circle(0, 0, r).fill(color).stroke({ color: v.stage === "elder" ? 0xdddddd : 0x111111, width: 1 });
-    if (v.goal?.type === "rest") g.circle(0, 0, r).fill({ color: 0x000000, alpha: 0.4 });
-  }
-
-  /** Called every frame: ease villagers toward their latest server position and depth-sort. */
-  animate(dt: number): void {
+  /** Ease movers toward their latest server position, depth-sort, flicker fires, place labels. */
+  animate(dt: number, nowMs: number): void {
     const k = Math.min(1, dt * 0.25);
     for (const look of this.villagerViews.values()) {
       look.root.x += (look.target.x - look.root.x) * k;
       look.root.y += (look.target.y - look.root.y) * k;
-      look.root.zIndex = look.root.y;
+      const w = projection.toWorld(look.root.x, look.root.y);
+      look.root.zIndex = projection.depth(w.x, w.y);
+      look.name.position.set(Math.round(look.root.x), Math.round(look.root.y - look.height - 2));
+      if (look.bubble.visible) look.bubble.position.set(Math.round(look.root.x), Math.round(look.root.y - look.height - 14));
     }
+    for (const look of this.animalViews.values()) {
+      look.root.x += (look.target.x - look.root.x) * k;
+      look.root.y += (look.target.y - look.root.y) * k;
+      const w = projection.toWorld(look.root.x, look.root.y);
+      look.root.zIndex = projection.depth(w.x, w.y);
+    }
+    const t = nowMs / 1000;
+    for (const view of this.structureViews.values()) {
+      if (view.flame) {
+        const m = footprintCenter(view.s.w, view.s.h);
+        drawFlame(view.flame, m.x, m.y, t);
+      }
+    }
+  }
+
+  /** Light sources for the night overlay, in this scene's local pixels. */
+  lights(): Light[] {
+    const out: Light[] = [];
+    for (const view of this.structureViews.values()) {
+      const s = view.s;
+      if (!s.built) continue;
+      const m = footprintCenter(s.w, s.h);
+      const base = { x: view.root.x + m.x, y: view.root.y + m.y };
+      if (s.kind === "campfire") out.push({ x: base.x, y: base.y - 4, color: 0xffa040, radius: 44, strength: 1 });
+      else if (s.kind === "house") out.push({ x: base.x - 8, y: base.y - 6, color: 0xffd080, radius: 16, strength: 0.6 });
+      else if (s.kind === "shrine") out.push({ x: base.x, y: base.y - 10, color: 0xd0e0ff, radius: 20, strength: 0.5 });
+      else if (s.kind === "workshop") out.push({ x: base.x + 6, y: base.y - 4, color: 0xffb060, radius: 14, strength: 0.5 });
+    }
+    return out;
+  }
+
+  // ---- Picking and highlighting --------------------------------------------------------
+
+  /** What is under a point given in this scene's local pixels. */
+  pick(lx: number, ly: number): Pick | null {
+    const s = this.state;
+    if (!s) return null;
+    for (const [id, look] of this.villagerViews) {
+      const dx = lx - look.root.x;
+      const dy = ly - look.root.y;
+      if (Math.abs(dx) <= 6 && dy <= 3 && dy >= -look.height - 2) return { kind: "villager", id };
+    }
+    for (const [id, look] of this.animalViews) {
+      const dx = lx - look.root.x;
+      const dy = ly - look.root.y;
+      if (Math.abs(dx) <= 6 && dy <= 2 && dy >= -12) return { kind: "animal", id };
+    }
+    for (const st of s.structures) {
+      const h = structureHeight(st.kind, st.built);
+      for (const dy of h > 0 ? [0, h] : [0]) {
+        const w = projection.toWorld(lx, ly + dy);
+        if (w.x >= st.x && w.x < st.x + st.w && w.y >= st.y && w.y < st.y + st.h) return { kind: "structure", id: st.id };
+      }
+    }
+    const w = projection.toWorld(lx, ly);
+    const tx = Math.floor(w.x);
+    const ty = Math.floor(w.y);
+    if (tx >= 0 && ty >= 0 && tx < s.width && ty < s.height) return { kind: "tile", x: tx, y: ty };
+    return null;
+  }
+
+  setHover(p: Pick | null): void {
+    if (samePick(this.hovered, p)) return;
+    this.hovered = p;
+    this.drawHover();
+  }
+
+  setSelection(p: Pick | null): void {
+    this.selection = p;
+    this.drawHover();
+  }
+
+  private drawHover(): void {
+    const g = this.hover;
+    g.clear();
+    if (this.selection) this.outline(g, this.selection, 0xe0a458, 0.9);
+    if (this.hovered && !samePick(this.hovered, this.selection)) this.outline(g, this.hovered, 0xffffff, 0.5);
+  }
+
+  private outline(g: Graphics, p: Pick, color: number, alpha: number): void {
+    const s = this.state;
+    if (!s) return;
+    if (p.kind === "tile") {
+      const f = footprint(p.x, p.y, 1, 1);
+      g.poly([f.top.x, f.top.y, f.right.x, f.right.y, f.bottom.x, f.bottom.y, f.left.x, f.left.y]).fill({ color, alpha: alpha * 0.15 }).stroke({ color, alpha, width: 1 });
+    } else if (p.kind === "structure") {
+      const st = s.structures.find((x) => x.id === p.id);
+      if (!st) return;
+      const f = footprint(st.x, st.y, st.w, st.h);
+      g.poly([f.top.x, f.top.y, f.right.x, f.right.y, f.bottom.x, f.bottom.y, f.left.x, f.left.y]).stroke({ color, alpha, width: 1 });
+    } else {
+      const look = p.kind === "villager" ? this.villagerViews.get(p.id) : this.animalViews.get(p.id);
+      if (!look) return;
+      g.ellipse(look.root.x, look.root.y, TILE_W / 4, TILE_H / 4).stroke({ color, alpha, width: 1 });
+    }
+  }
+
+  /** Where a villager currently is on screen (scene-local), for the camera to follow. */
+  villagerPosition(id: string): { x: number; y: number } | null {
+    const look = this.villagerViews.get(id);
+    return look ? { x: look.root.x, y: look.root.y } : null;
   }
 }
 
-function colorFromId(id: string): number {
-  let h = 0;
-  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
-  const hue = Math.abs(h) % 360;
-  return hslToHex(hue, 0.6, 0.6);
+function decorKey(t: Tile): string {
+  if ((t.kind === "forest" || t.kind === "rock" || t.kind === "ore") && t.amount > 0) return `${t.kind}|${t.amount >= 7 ? "big" : "small"}`;
+  return "";
 }
 
-function hslToHex(h: number, s: number, l: number): number {
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - c / 2;
-  let [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
-  r = Math.round((r + m) * 255);
-  g = Math.round((g + m) * 255);
-  b = Math.round((b + m) * 255);
-  return (r << 16) | (g << 8) | b;
-}
-
-function lerpColor(a: number, b: number, t: number): number {
-  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
-  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
-  const r = Math.round(ar + (br - ar) * t), g = Math.round(ag + (bg - ag) * t), bl = Math.round(ab + (bb - ab) * t);
-  return (r << 16) | (g << 8) | bl;
+function samePick(a: Pick | null, b: Pick | null): boolean {
+  if (!a || !b) return a === b;
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "tile" && b.kind === "tile") return a.x === b.x && a.y === b.y;
+  return (a as { id: string }).id === (b as { id: string }).id;
 }

@@ -7,6 +7,7 @@ import type {
   ClientMessage,
   DeltaMessage,
   ServerMessage,
+  ServerInfo,
   Settings,
   SnapshotMessage,
   VillagerView,
@@ -28,6 +29,7 @@ export interface HubDeps {
   getAi: () => AiStatus;
   adminToken: string;
   adminContext: () => AdminContext;
+  serverInfo: () => ServerInfo;
 }
 
 export class Hub {
@@ -66,6 +68,7 @@ export class Hub {
       isAdmin,
       settings: this.deps.getSettings(),
       ai: this.deps.getAi(),
+      server: this.deps.serverInfo(),
     };
   }
 

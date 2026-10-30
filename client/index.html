@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Idle Village</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -18,7 +18,8 @@
       <span id="speed" class="muted">1x</span>
       <span id="stock" class="muted"></span>
       <span id="ai" class="muted" title="Claude spend this hour / cap">🧠 –</span>
-      <span id="viewers" class="muted" title="viewers">👁 0</span>
+      <span id="viewers" class="muted" title="people watching right now">👁 0</span>
+      <button id="homeBtn" class="small" title="Back to the village">⌖</button>
       <button id="chronicleBtn" class="small" title="Open the village chronicle">📜 0</button>
     </div>
 
@@ -31,18 +32,27 @@
       <button data-speed="20">20x</button>
       <button data-speed="100">100x</button>
       <span class="sep"></span>
-      <button data-cmd="reset" class="danger">Reset world</button>
-      <span class="sep"></span>
       <button id="giftBtn" title="Drop resources at the storehouse">Gift…</button>
       <button id="rumorBtn" title="Whisper a rumor villagers will gossip about">Whisper…</button>
-      <button id="aiBtn" title="Toggle Claude-driven villagers">AI: on</button>
-      <button id="budgetBtn" title="Hourly spend cap">$/h</button>
       <span class="sep"></span>
-      <button id="newsBtn" title="Travellers bring real-world headlines as gossip">News: on</button>
-      <button id="storyBtn" title="Let the storyteller model write the chronicle">Chronicle: on</button>
-      <button id="popBtn" title="No arrivals or births beyond this many villagers">Pop ≤ 12</button>
+      <button id="settingsBtn" title="Settings">⚙ Settings</button>
+      <button data-cmd="reset" class="danger">Reset world</button>
       <span id="adminMsg" class="muted"></span>
     </div>
+    </div>
+
+    <div id="settings" class="panel hidden">
+      <button id="settingsClose" class="close">×</button>
+      <div class="inbox-title">Settings</div>
+      <label class="field"><input type="checkbox" id="setAi" /> <span>Claude-driven villagers <small class="muted">off = autopilot only</small></span></label>
+      <label class="field"><span>Spend cap</span><input type="number" id="setBudget" min="0" max="20" step="0.05" /> <span class="muted">$ per hour</span></label>
+      <label class="field"><span>Population cap</span><input type="number" id="setPop" min="2" max="30" step="1" /> <span class="muted">no arrivals or births past this</span></label>
+      <label class="field"><input type="checkbox" id="setStory" /> <span>Chronicle <small class="muted">Opus writes daily pages, obituaries, welcomes, names</small></span></label>
+      <label class="field"><input type="checkbox" id="setNews" /> <span>Travellers bring outside news</span></label>
+      <label class="field col"><span>News feeds <small class="muted">one RSS/Atom URL per line; blank uses the defaults</small></span><textarea id="setFeeds" rows="3" spellcheck="false"></textarea></label>
+      <label class="field"><input type="checkbox" id="setNotify" /> <span>Phone notifications</span></label>
+      <div id="notifyNote" class="muted small"></div>
+      <div class="actions"><button id="settingsSave">Save</button><span id="settingsMsg" class="muted"></span></div>
     </div>
 
     <div id="inbox" class="panel">
@@ -63,7 +73,8 @@
       <div id="inspectorBody"></div>
     </div>
 
-    <div id="hint" class="muted">drag to pan · scroll to zoom · click a villager</div>
+    <div id="tooltip" class="hidden"></div>
+    <div id="hint" class="muted">drag to pan · scroll or pinch to zoom · click anything</div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

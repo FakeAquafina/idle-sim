@@ -70,6 +70,7 @@ export interface NewsDeps {
   budget: Budget;
   getSettings: () => Settings;
   systemPrompt: string;
+  /** Fallback feeds when the admin has not set any (env NEWS_FEEDS). */
   feeds?: string[];
   blocklist?: string[];
   /** Injectable for tests. */
@@ -133,7 +134,8 @@ Retell one or two of them as gossip the traveller tells at the campfire of a qui
   }
 
   private async fetchHeadlines(): Promise<string[]> {
-    const feeds = this.deps.feeds ?? DEFAULT_FEEDS;
+    const custom = this.deps.getSettings().newsFeeds;
+    const feeds = custom?.length ? custom : (this.deps.feeds ?? DEFAULT_FEEDS);
     const blocklist = this.deps.blocklist ?? DEFAULT_BLOCKLIST;
     const fetchText = this.deps.fetchText ?? defaultFetch;
     const all: string[] = [];
