@@ -10,5 +10,7 @@ export default defineConfig({
       "/ws": { target: "ws://localhost:3000", ws: true },
     },
   },
-  build: { outDir: "dist", emptyOutDir: true },
+  // main.ts uses top-level await (PixiJS init), which needs an ES2022 output.
+  // Every browser from 2021 on supports it, phones included.
+  build: { outDir: "dist", emptyOutDir: true, target: "es2022" },
 });
