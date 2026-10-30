@@ -10,7 +10,7 @@ can grant them.
 - `shared/` — types, structure catalog, WebSocket protocol (used by both sides)
 - `server/` — Node + Fastify: the simulation loop, viewer hub, persistence
 - `client/` — Vite + PixiJS viewer (thin: it only mirrors and draws server state)
-- `deploy/` — systemd unit for the Linux host; `Dockerfile` for containers
+- `deploy/` — push, install and systemd files for the home Linux box
 
 ## Run locally
 
@@ -144,12 +144,72 @@ npx tsx scripts/admin.ts '{"cmd":"speed","value":20}'   # any admin command, tok
 npm test
 ```
 
-## Deploy (Linux VM / Raspberry Pi)
+## Deploy (home Linux box)
 
-```bash
-npm ci && npm run build        # builds client/dist, which the server serves
-npm run start                  # or install deploy/idle-sim.service
+The village is one Node process plus the `server/data` folder, so it runs
+anywhere Node 22 does. On Proxmox, an **unprivileged Debian 12 LXC** is the
+right size: 1 CPU, 1 GB RAM, 8 GB disk is plenty, it boots in a second and uses
+a few hundred MB at rest. A VM works too and avoids one tweak below, at the
+cost of RAM. A Raspberry Pi 4 or 5 is fine as well.
+
+**Reaching it from anywhere:** put Tailscale on the box and on your laptop or
+phone. In an unprivileged LXC, Tailscale needs the TUN device passed through;
+on the Proxmox host add these two lines to `/etc/pve/lxc/<id>.conf` and restart
+the container (a VM needs nothing):
+
+```
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 ```
 
-Expose it with Tailscale, a Cloudflare Tunnel, or an HTTPS reverse proxy.
-Viewers are read-only; only requests carrying `ADMIN_TOKEN` can change anything.
+### First deploy
+
+On the box, once, as root: create your user and let it sudo, and allow SSH in.
+
+```bash
+apt update && apt install -y sudo openssh-server curl
+adduser murph && usermod -aG sudo murph
+```
+
+Then from your Mac (or anything that can `ssh` to the box, including over
+Tailscale from work):
+
+```bash
+deploy/push.sh murph@homebox --with-env
+```
+
+That copies the code to `~/idle-sim` on the box (never touching saved worlds),
+installs Node 22, builds the viewer, installs and starts the `idle-sim` systemd
+service. `--with-env` also copies your local `server/.env` (API key, admin
+token, feeds) so the box is ready at once; without it, the installer writes a
+fresh `.env` with a random admin token and tells you to add the API key.
+
+### Updates
+
+Same command, without `--with-env`:
+
+```bash
+deploy/push.sh murph@homebox
+```
+
+### Sharing the link
+
+```bash
+sudo tailscale up
+sudo tailscale serve --bg 3000
+```
+
+`tailscale serve` gives the village an `https://homebox.<tailnet>.ts.net`
+address that anyone on your tailnet can open; share the machine with friends
+from the Tailscale admin console, or use `tailscale funnel 3000` to make it
+public (viewers are read-only and capped at 25; only the admin token changes
+anything, so keep it off public links).
+
+### Day to day on the box
+
+```bash
+systemctl status idle-sim          # is it up
+journalctl -u idle-sim -f          # live log: Claude calls, chats, news, chronicle
+sudo systemctl restart idle-sim    # after editing ~/idle-sim/server/.env
+cp -r ~/idle-sim/server/data ~/village-backup-$(date +%F)   # back up the world
+```

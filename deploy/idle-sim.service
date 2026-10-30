@@ -1,5 +1,5 @@
-# systemd unit for the always-on village server.
-# Install: sudo cp deploy/idle-sim.service /etc/systemd/system/ && sudo systemctl enable --now idle-sim
+# systemd unit for the always-on village server. deploy/install.sh fills in the
+# placeholders and installs it; you normally never edit this by hand.
 [Unit]
 Description=Idle Village Sim
 After=network-online.target
@@ -7,14 +7,19 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=idlesim
-WorkingDirectory=/opt/idle-sim
-ExecStart=/usr/bin/npm run start
+User=__USER__
+WorkingDirectory=__DIR__
+ExecStart=__NPM__ run start
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 # Give the server time to save the world on shutdown.
 TimeoutStopSec=20
+# Modest hardening: no privilege escalation, private /tmp, only the data folder writable.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=__DIR__/server/data
 
 [Install]
 WantedBy=multi-user.target
