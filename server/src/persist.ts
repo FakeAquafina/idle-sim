@@ -33,6 +33,10 @@ export function loadWorld(dir: string): WorldState | null {
     w.animals ??= [];
     w.shortageSince ??= {};
     w.storehouse.ore ??= 0;
+    w.conversations ??= [];
+    w.chronicle ??= [];
+    // A chat that was waiting on Claude when the server stopped gets dropped; the pair just parts ways.
+    w.conversations = w.conversations.filter((c) => !c.pending);
     for (const v of w.villagers) v.cooldowns ??= {};
     for (const p of w.petitions) {
       p.supporters ??= [p.villagerId];

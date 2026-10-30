@@ -1,6 +1,6 @@
 // WebSocket client plus a local mirror of the world that deltas are applied to.
 
-import type { AdminCommand, ClientMessage, DeltaMessage, ServerMessage, SnapshotMessage, WorldEvent } from "@idle-sim/shared";
+import type { AdminCommand, ChronicleEntry, ClientMessage, DeltaMessage, ServerMessage, SnapshotMessage, WorldEvent } from "@idle-sim/shared";
 
 import type { AiStatus, Settings } from "@idle-sim/shared";
 
@@ -43,6 +43,7 @@ export interface NetHandlers {
   onSnapshot(msg: SnapshotMessage): void;
   onDelta(msg: DeltaMessage): void;
   onEvent(event: WorldEvent): void;
+  onChronicle(entry: ChronicleEntry): void;
   onViewers(count: number): void;
   onAdminResult(ok: boolean, message?: string): void;
   onStatus(status: ConnectionStatus): void;
@@ -80,6 +81,9 @@ export function connect(token: string | null, handlers: NetHandlers): Connection
           break;
         case "event":
           handlers.onEvent(msg.event);
+          break;
+        case "chronicle":
+          handlers.onChronicle(msg.entry);
           break;
         case "viewers":
           handlers.onViewers(msg.count);

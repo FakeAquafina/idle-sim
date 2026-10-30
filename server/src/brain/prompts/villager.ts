@@ -30,11 +30,65 @@ function describeGoal(v: Villager): string {
   }
 }
 
-function relationWord(score: number): string {
+export function relationWord(score: number): string {
   if (score >= 40) return "close friend";
   if (score >= 15) return "friend";
   if (score <= -15) return "rival";
   return "acquaintance";
+}
+
+/** Partner, parents, children: the people who matter most. */
+function familyLine(w: WorldState, v: Villager): string {
+  const name = (id: string) => w.villagers.find((x) => x.id === id)?.name ?? "someone";
+  const parts: string[] = [];
+  if (v.partnerId) parts.push(`partner ${name(v.partnerId)}`);
+  if (v.parentIds?.length) parts.push(`child of ${v.parentIds.map(name).join(" and ")}`);
+  const children = w.villagers.filter((o) => o.alive && o.parentIds?.includes(v.id)).map((o) => o.name);
+  if (children.length) parts.push(`parent of ${children.join(", ")}`);
+  return parts.length ? parts.join("; ") : "none";
+}
+
+/** The two or three people this villager feels most strongly about. */
+function bondsLine(w: WorldState, v: Villager): string {
+  const bonds = Object.entries(v.relationships)
+    .map(([id, score]) => ({ o: w.villagers.find((x) => x.id === id && x.alive), score }))
+    .filter((b): b is { o: Villager; score: number } => !!b.o && Math.abs(b.score) >= 15)
+    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
+    .slice(0, 3)
+    .map((b) => `${b.o.name} (${relationWord(b.score)})`);
+  return bonds.length ? bonds.join(", ") : "no strong bonds yet";
+}
+
+function rumorsSection(w: WorldState): string {
+  const c = w.clock;
+  const rumors = w.rumors
+    .filter((r) => c.tick - r.tick < c.ticksPerDay * 2)
+    .map((r) => `- ${r.source === "news" ? "(a traveller's tale) " : ""}${r.text}`)
+    .join("\n");
+  return rumors ? `\n## Rumors going round\n${rumors}` : "";
+}
+
+/** The user message for a conversation between two villagers who have just met. */
+export function buildConversePrompt(w: WorldState, a: Villager, b: Villager): string {
+  const c = w.clock;
+  const s = w.storehouse;
+  const who = (v: Villager, other: Villager) =>
+    `${v.name}: ${v.stage}, ${v.skill}. Traits: ${v.traits.join(", ")}. Quirk: ${v.quirk}. Hunger ${Math.round(v.needs.hunger)}, energy ${Math.round(v.needs.energy)}, social ${Math.round(v.needs.social)}. Was ${describeGoal(v)}. Thinks of ${other.name} as a ${relationWord(v.relationships[other.id] ?? 0)}. Family: ${familyLine(w, v)}.
+  Remembers: ${v.memory.slice(-5).join(" / ") || "nothing in particular"}`;
+  const events = w.events
+    .slice(-5)
+    .map((e) => `- ${e.text}`)
+    .join("\n");
+  return `## A conversation
+${a.name} has come over to talk to ${b.name}. Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}, ${c.weather}. Storehouse: ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds.
+
+${who(a, b)}
+${who(b, a)}
+
+## Recent happenings
+${events || "- quiet"}${rumorsSection(w)}
+
+Write their exchange: two to four lines, ${a.name} speaks first, alternating. Use the names "${a.name}" and "${b.name}" as speakers.`;
 }
 
 export function buildVillagerPrompt(w: WorldState, v: Villager): string {
@@ -85,10 +139,6 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
     .map((e) => `- ${e.text}`)
     .join("\n");
   const memories = v.memory.length ? v.memory.map((m) => `- ${m}`).join("\n") : "- (nothing yet)";
-  const rumors = w.rumors
-    .filter((r) => c.tick - r.tick < c.ticksPerDay * 2)
-    .map((r) => `- ${r.text}`)
-    .join("\n");
 
   const mine = w.petitions.filter((p) => p.villagerId === v.id).slice(-1)[0];
   const petitionLine = mine
@@ -112,7 +162,7 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
   return `## You
 ${v.name}, ${v.stage}, ${years} years old. Traits: ${v.traits.join(", ")}. Quirk: ${v.quirk}. Skill: ${v.skill}.
 Needs: hunger ${Math.round(v.needs.hunger)}, energy ${Math.round(v.needs.energy)}, social ${Math.round(v.needs.social)}, warmth ${Math.round(v.needs.warmth)}.
-Carrying: ${Object.entries(v.inventory).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing"}. Home: ${v.homeId ? "yes" : "none"}.
+Carrying: ${Object.entries(v.inventory).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing"}. Home: ${v.homeId ? "yes" : "none"}. Family: ${familyLine(w, v)}. Bonds: ${bondsLine(w, v)}.
 Currently: ${describeGoal(v)}${v.source === "autopilot" ? " (out of habit)" : ""}.
 
 ## Now
@@ -128,7 +178,7 @@ Open petitions at the shrine: ${openCount}. ${petitionLine}${shrineNote}
 
 ## Recent happenings
 ${events || "- quiet"}
-${rumors ? `\n## Rumors going round\n${rumors}` : ""}
+${rumorsSection(w)}
 
 ## Your memories
 ${memories}

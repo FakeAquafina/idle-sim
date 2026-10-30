@@ -3,6 +3,7 @@
 import type { WebSocket } from "ws";
 import type {
   AiStatus,
+  ChronicleEntry,
   ClientMessage,
   DeltaMessage,
   ServerMessage,
@@ -100,6 +101,10 @@ export class Hub {
 
   broadcastEvent(event: WorldEvent): void {
     this.broadcast({ type: "event", event });
+  }
+
+  broadcastChronicle(entry: ChronicleEntry): void {
+    this.broadcast({ type: "chronicle", entry });
   }
 
   private onMessage(client: Client, raw: string): void {

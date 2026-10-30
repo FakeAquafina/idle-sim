@@ -18,7 +18,9 @@ export interface Persona {
 }
 
 export const WALK_SPEED = 1.6 / TICKS_PER_SECOND; // tiles per tick
+/** Above this many notes the brain condenses the oldest ones; above the hard limit they simply fall off. */
 export const MEMORY_LIMIT = 20;
+export const MEMORY_HARD_LIMIT = 28;
 
 export function createVillager(w: WorldState, p: Persona, tile: Vec2): Villager {
   const ageDays = Math.floor(p.ageYears * DAYS_PER_YEAR);
@@ -99,7 +101,7 @@ export function say(w: WorldState, v: Villager, text: string, seconds = 6): void
 
 export function remember(v: Villager, note: string): void {
   v.memory.push(note);
-  if (v.memory.length > MEMORY_LIMIT) v.memory.splice(0, v.memory.length - MEMORY_LIMIT);
+  if (v.memory.length > MEMORY_HARD_LIMIT) v.memory.splice(0, v.memory.length - MEMORY_HARD_LIMIT);
 }
 
 export function ageOneDay(v: Villager): void {

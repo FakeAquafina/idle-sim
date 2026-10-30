@@ -69,8 +69,37 @@ will gossip about for a couple of days.
 
 Optional notifications: set `NTFY_URL` (e.g. `https://ntfy.sh/your-topic`) or
 `DISCORD_WEBHOOK` in `server/.env` to get a message when a petition is made, a
-newcomer arrives, a season turns, or the hourly budget is hit (batched, at most
-one message per minute).
+newcomer arrives, someone is born or dies, a couple forms, a building is named,
+a season turns, or the hourly budget is hit (batched, at most one message per
+minute).
+
+## A living village
+
+- **Conversations.** When a villager goes to talk to someone, Claude writes both
+  sides of a short exchange (2-4 lines) that plays out as speech bubbles. The
+  tone (warm, neutral, tense) moves their affinity; each may keep a memory of it.
+  Without Claude, or within three minutes of the last chat, canned small talk is
+  used instead.
+- **Bonds and families.** Affinity grows out of talk and time by the fire. Two
+  close adults sharing a house become partners and may have a child; children
+  grow up on sim-years, elders die of old age, and going hungry or cold for a
+  day and a half is fatal. Deaths send everyone to the shrine to mourn.
+- **Arrivals.** When there is a spare bed and food to spare, strangers walk in
+  from the north road (more eagerly while the village is under 5 people). New
+  people are invented by Claude (name, traits, quirk, trade), with a spare
+  persona from `server/data/newcomers.json` as the fallback. A **population cap**
+  (default 12) bounds both growth and API spend.
+- **Memory.** Each villager keeps about twenty notes; when they pile up, Claude
+  condenses the oldest dozen into a line or two.
+- **News.** About once an hour, headlines from public RSS feeds (BBC World, NPR,
+  ScienceDaily by default; see `NEWS_FEEDS`) are filtered through a blocklist and
+  retold by Claude as a traveller's garbled gossip, which villagers then talk
+  about. Switch off with the **News** admin button.
+- **The chronicle.** `claude-opus-5-5` writes a page at the end of each village
+  day (when enough happened), plus obituaries, welcomes for newcomers and
+  newborns, and names for the dock, mine, workshop, well, shrine and storehouse.
+  Open it with the 📜 button. Opus calls are gated by the same hourly budget and
+  opt into the API's server-side refusal fallback. Switch off with **Chronicle**.
 
 ## Time
 
@@ -84,6 +113,7 @@ appends every event to `server/data/events.jsonl`.
 cd server
 npx tsx scripts/smoke-plan.ts 2            # one real Claude call per villager, printed
 npx tsx scripts/make-world.ts --seeds 0    # fresh world.json with chosen stock (stop the server first)
+npx tsx scripts/admin.ts '{"cmd":"speed","value":20}'   # any admin command, token read from .env
 ```
 
 ## Tests

@@ -7,6 +7,9 @@ const FILE = "settings.json";
 export const DEFAULT_SETTINGS: Settings = {
   aiEnabled: true,
   budgetUsdPerHour: 0.15, // about $3.60/day if the village runs flat out
+  newsEnabled: true,
+  bigMomentsEnabled: true,
+  populationMax: 12,
 };
 
 export function loadSettings(dir: string): Settings {

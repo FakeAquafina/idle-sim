@@ -19,6 +19,7 @@
       <span id="stock" class="muted"></span>
       <span id="ai" class="muted" title="Claude spend this hour / cap">🧠 –</span>
       <span id="viewers" class="muted" title="viewers">👁 0</span>
+      <button id="chronicleBtn" class="small" title="Open the village chronicle">📜 0</button>
     </div>
 
     <div id="admin" class="panel hidden">
@@ -36,6 +37,10 @@
       <button id="rumorBtn" title="Whisper a rumor villagers will gossip about">Whisper…</button>
       <button id="aiBtn" title="Toggle Claude-driven villagers">AI: on</button>
       <button id="budgetBtn" title="Hourly spend cap">$/h</button>
+      <span class="sep"></span>
+      <button id="newsBtn" title="Travellers bring real-world headlines as gossip">News: on</button>
+      <button id="storyBtn" title="Let the storyteller model write the chronicle">Chronicle: on</button>
+      <button id="popBtn" title="No arrivals or births beyond this many villagers">Pop ≤ 12</button>
       <span id="adminMsg" class="muted"></span>
     </div>
     </div>
@@ -46,6 +51,12 @@
     </div>
 
     <div id="feed" class="panel"></div>
+
+    <div id="chronicle" class="panel hidden">
+      <button id="chronicleClose" class="close">×</button>
+      <div class="inbox-title">The village chronicle</div>
+      <div id="chronicleBody"></div>
+    </div>
 
     <div id="inspector" class="panel hidden">
       <button id="inspectorClose" class="close">×</button>

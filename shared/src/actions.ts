@@ -60,7 +60,45 @@ export interface Petition {
 export interface Rumor {
   text: string;
   tick: number;
+  /** Where it came from: the provider's whisper, or outside news garbled by travellers. */
+  source?: "whisper" | "news";
 }
+
+// ---- Other things Claude writes ---------------------------------------------
+
+/** A short exchange between two villagers who have met. */
+export const ConverseOutputSchema = z.object({
+  lines: z
+    .array(z.object({ speaker: z.string().describe("The speaker's name, exactly as given."), text: z.string().describe("Under 120 characters.") }))
+    .min(2)
+    .max(4),
+  tone: z.enum(["warm", "neutral", "tense"]).describe("How the exchange leaves the two feeling about each other."),
+  memory_a: z.string().nullable().describe("What the first villager will remember of this, under 100 characters, or null."),
+  memory_b: z.string().nullable().describe("What the second villager will remember of this, under 100 characters, or null."),
+});
+export type ConverseOutput = z.infer<typeof ConverseOutputSchema>;
+
+/** Old memories condensed into a line or two. */
+export const MemorySummarySchema = z.object({
+  summary: z.array(z.string().describe("Under 120 characters, first person.")).min(1).max(2),
+});
+export type MemorySummary = z.infer<typeof MemorySummarySchema>;
+
+/** A newcomer or a newborn. */
+export const PersonaSchema = z.object({
+  name: z.string().describe("A single given name, not used by anyone in the village."),
+  traits: z.array(z.string()).length(2).describe("Two one-word traits."),
+  quirk: z.string().describe("A small habit, under 60 characters, lowercase, no trailing full stop."),
+  skill: z.string().describe("One trade such as farmer, builder, fisher, hunter, miner, cook, forager, mason, woodcutter, herder."),
+  ageYears: z.number().int().describe("Age in years."),
+});
+export type PersonaOutput = z.infer<typeof PersonaSchema>;
+
+/** Outside headlines retold as village gossip. */
+export const GossipSchema = z.object({
+  gossip: z.array(z.string().describe("Under 200 characters.")).min(1).max(2),
+});
+export type GossipOutput = z.infer<typeof GossipSchema>;
 
 export const MAX_OPEN_PETITIONS = 3;
 export const MAX_OPEN_PER_VILLAGER = 1;

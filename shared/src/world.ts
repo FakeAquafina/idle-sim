@@ -134,6 +134,14 @@ export interface Villager {
   /** other villager id -> affinity -100..100 */
   relationships: Record<string, number>;
   homeId?: string;
+  /** Life partner, once two close adults sharing a house pair up. */
+  partnerId?: string;
+  /** For villagers born here. */
+  parentIds?: string[];
+  /** Ticks spent starving or freezing; death comes when it lasts too long. */
+  exposureTicks?: number;
+  diedTick?: number;
+  deathCause?: string;
   /** Who chose the current goal. */
   source: "ai" | "autopilot";
   /** Claude's latest private reasoning (shown in the inspector). */
@@ -150,6 +158,33 @@ export interface Clock {
   weather: Weather;
   timeOfDay: number; // 0..1, 0 = midnight
   isNight: boolean;
+}
+
+/** A short exchange between two villagers, played out line by line. */
+export interface Conversation {
+  id: string;
+  aId: string;
+  bId: string;
+  startedTick: number;
+  /** Empty while waiting for Claude to write the lines. */
+  lines: { speakerId: string; text: string }[];
+  nextLine: number;
+  nextTick: number;
+  tone: "warm" | "neutral" | "tense";
+  /** True until the lines have been filled in (by Claude or the canned fallback). */
+  pending: boolean;
+  /** Memory notes to give each speaker once the talk is over. */
+  notes?: { a?: string; b?: string };
+}
+
+/** An entry in the village chronicle, written by the storyteller model. */
+export interface ChronicleEntry {
+  id: number;
+  tick: number;
+  day: number;
+  kind: "day" | "obituary" | "welcome" | "naming";
+  title: string;
+  text: string;
 }
 
 export interface WorldEvent {
@@ -186,8 +221,18 @@ export interface WorldState {
   dirtyTiles: number[];
   /** Requests villagers have made to the provider. */
   petitions: Petition[];
-  /** Whispers from the provider that villagers gossip about for a while. */
+  /** Whispers from the provider (and garbled outside news) that villagers gossip about for a while. */
   rumors: Rumor[];
+  /** Conversations currently being spoken. */
+  conversations: Conversation[];
+  /** The village's written history (capped; the full event log lives on disk). */
+  chronicle: ChronicleEntry[];
+  /** Set when the village could take a newcomer; the brain supplies a persona. */
+  pendingArrival?: { sinceTick: number };
+  /** Set when a couple is expecting; the brain supplies the child's persona. */
+  pendingBirth?: { parentIds: [string, string]; sinceTick: number };
+  lastArrivalTick?: number;
+  lastBirthTick?: number;
 }
 
 /** Server-side settings the admin can change at runtime. */
@@ -195,6 +240,12 @@ export interface Settings {
   aiEnabled: boolean;
   /** Hard cap on Claude spend, in US dollars per rolling hour. */
   budgetUsdPerHour: number;
+  /** Fetch real-world headlines and turn them into village gossip. */
+  newsEnabled: boolean;
+  /** Let the storyteller model write the chronicle, obituaries, welcomes and names. */
+  bigMomentsEnabled: boolean;
+  /** No arrivals or births once the village reaches this many living villagers. */
+  populationMax: number;
 }
 
 /** AI status shared with viewers. */

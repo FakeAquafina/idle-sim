@@ -1,7 +1,7 @@
 // WebSocket messages between server and viewers.
 
 import type { Petition, PetitionAsk, Rumor } from "./actions.ts";
-import type { AiStatus, Animal, Clock, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
+import type { AiStatus, Animal, ChronicleEntry, Clock, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
 
 /** Villager as sent over the wire: same as Villager but without the path. */
 export type VillagerView = Omit<Villager, "path">;
@@ -36,6 +36,12 @@ export interface EventMessage {
   event: WorldEvent;
 }
 
+/** A new page in the village chronicle. */
+export interface ChronicleMessage {
+  type: "chronicle";
+  entry: ChronicleEntry;
+}
+
 export interface ViewersMessage {
   type: "viewers";
   count: number;
@@ -47,7 +53,7 @@ export interface AdminResultMessage {
   message?: string;
 }
 
-export type ServerMessage = SnapshotMessage | DeltaMessage | EventMessage | ViewersMessage | AdminResultMessage;
+export type ServerMessage = SnapshotMessage | DeltaMessage | EventMessage | ChronicleMessage | ViewersMessage | AdminResultMessage;
 
 export type AdminCommand =
   | { cmd: "pause" }
@@ -59,7 +65,10 @@ export type AdminCommand =
   | { cmd: "gift"; resource: Exclude<PetitionAsk, "newcomer">; amount?: number }
   | { cmd: "rumor"; text: string }
   | { cmd: "setAi"; enabled: boolean }
-  | { cmd: "setBudget"; usdPerHour: number };
+  | { cmd: "setBudget"; usdPerHour: number }
+  | { cmd: "setNews"; enabled: boolean }
+  | { cmd: "setBigMoments"; enabled: boolean }
+  | { cmd: "setPopulationMax"; value: number };
 
 export interface AdminMessage {
   type: "admin";

@@ -3,6 +3,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AiStatus, Settings, WorldState } from "@idle-sim/shared";
+import { inConversation } from "../sim/conversation.ts";
 import { remember, say } from "../sim/villager.ts";
 import { planToGoal } from "./apply.ts";
 import type { Budget } from "./budget.ts";
@@ -66,7 +67,7 @@ export class Scheduler {
 
     const now = Date.now();
     const candidates = w.villagers
-      .filter((v) => v.alive && !this.inflight.has(v.id))
+      .filter((v) => v.alive && !this.inflight.has(v.id) && !inConversation(w, v.id))
       .filter((v) => now - (this.lastPlanAt.get(v.id) ?? 0) >= MIN_INTERVAL_MS)
       .filter((v) => this.poked.has(v.id) || v.goal === null || v.source === "autopilot" || now - (this.lastPlanAt.get(v.id) ?? 0) >= PERIOD_MS)
       .sort((a, b) => (this.lastPlanAt.get(a.id) ?? 0) - (this.lastPlanAt.get(b.id) ?? 0));
@@ -101,6 +102,7 @@ export class Scheduler {
       const w2 = getWorld();
       const v2 = w2.villagers.find((x) => x.id === villagerId);
       if (!v2 || !v2.alive) return;
+      if (inConversation(w2, v2.id)) return; // got into a chat while we waited; let it play out
       this.applyPlan(w2, v2, result.plan);
       const u = result.usage!;
       console.log(

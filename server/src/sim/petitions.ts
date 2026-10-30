@@ -15,9 +15,9 @@ import {
   type WorldState,
 } from "@idle-sim/shared";
 import { emitEvent } from "./events.ts";
-import { createVillager, remember, say, type Persona } from "./villager.ts";
-import { assignHomes, countResourceTiles, distance, hasCoast, isWalkable, structuresWithFunction, villageCenter } from "./world.ts";
-import { randInt } from "./rng.ts";
+import { arrive } from "./population.ts";
+import { remember, say, type Persona } from "./villager.ts";
+import { countResourceTiles, distance, hasCoast, structuresWithFunction } from "./world.ts";
 
 const RESOURCE_ASKS = ["wood", "stone", "food", "seeds"] as const;
 type ResourceAsk = (typeof RESOURCE_ASKS)[number];
@@ -281,29 +281,15 @@ export function deliverGift(w: WorldState, ask: PetitionAsk, amount?: number, ne
       emitEvent(w, "gift", "A traveller was seen on the road, but passed by.");
       return;
     }
-    const c = villageCenter(w);
-    let tile = { x: 1, y: Math.floor(w.height / 2) };
-    for (let i = 0; i < 60; i++) {
-      const cand = { x: randInt(w, 1, w.width - 2), y: randInt(w, 1, 3) };
-      if (isWalkable(w, cand.x, cand.y)) {
-        tile = cand;
-        break;
-      }
-    }
-    const v = createVillager(w, newcomer, tile);
-    v.goal = { type: "wander", target: { x: c.x, y: c.y + 2 } };
-    v.goalStartedTick = w.clock.tick;
+    const v = arrive(w, newcomer);
     remember(v, "I came to this village because something called me here.");
-    w.villagers.push(v);
-    assignHomes(w);
-    emitEvent(w, "arrival", `A stranger arrives from the north road: ${v.name}, a ${v.skill}.`, { villagerIds: [v.id], pos: tile });
   }
 }
 
-export function addRumor(w: WorldState, text: string): void {
+export function addRumor(w: WorldState, text: string, source: "whisper" | "news" = "whisper"): void {
   const clean = text.trim().slice(0, 240);
   if (!clean) return;
-  w.rumors.push({ text: clean, tick: w.clock.tick });
+  w.rumors.push({ text: clean, tick: w.clock.tick, source });
   if (w.rumors.length > 5) w.rumors.splice(0, w.rumors.length - 5);
-  emitEvent(w, "rumor", `Word goes round the village: "${clean}"`);
+  emitEvent(w, source === "news" ? "news" : "rumor", source === "news" ? `A traveller passing through says: "${clean}"` : `Word goes round the village: "${clean}"`);
 }

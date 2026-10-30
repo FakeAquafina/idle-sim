@@ -4,6 +4,7 @@ import { Camera } from "./render/camera.ts";
 import { TILE } from "./render/projection.ts";
 import { Scene } from "./render/scene.ts";
 import { highlightSpeed, setupAdminBar, showAdminMessage, updateAdminSettings } from "./ui/admin.ts";
+import { addChronicleEntry, resetChronicle, setupChronicle } from "./ui/chronicle.ts";
 import { renderInbox, setupInbox } from "./ui/inbox.ts";
 import { addEvent, resetFeed } from "./ui/feed.ts";
 import { renderInspector, selectVillager } from "./ui/inspector.ts";
@@ -30,6 +31,7 @@ const camera = new Camera(app, scene.root);
 scene.setClickGuard(() => camera.dragDistance > 4);
 scene.onVillagerClick = (id) => selectVillager(id, mirror.state);
 document.getElementById("inspectorClose")!.onclick = () => selectVillager(null, null);
+setupChronicle();
 
 let firstSnapshot = true;
 const conn = connect(token, {
@@ -43,9 +45,10 @@ const conn = connect(token, {
     setupAdminBar(msg.isAdmin, (cmd) => conn.sendAdmin(cmd));
     setupInbox(msg.isAdmin, (cmd) => conn.sendAdmin(cmd));
     highlightSpeed(s.speed, s.paused);
-    updateAdminSettings(msg.settings.aiEnabled, msg.settings.budgetUsdPerHour);
+    updateAdminSettings(msg.settings);
     updateAi(msg.ai);
     renderInbox(s.petitions);
+    resetChronicle(s.chronicle ?? []);
     if (firstSnapshot) {
       camera.fit(s.width * TILE, s.height * TILE);
       firstSnapshot = false;
@@ -59,11 +62,12 @@ const conn = connect(token, {
     updateTopbar(s);
     renderInspector(s);
     highlightSpeed(s.speed, s.paused);
-    updateAdminSettings(msg.settings.aiEnabled, msg.settings.budgetUsdPerHour);
+    updateAdminSettings(msg.settings);
     updateAi(msg.ai);
     renderInbox(s.petitions);
   },
   onEvent: addEvent,
+  onChronicle: addChronicleEntry,
   onViewers: updateViewers,
   onAdminResult: showAdminMessage,
   onStatus: updateStatus,

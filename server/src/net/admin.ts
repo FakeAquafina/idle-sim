@@ -85,6 +85,21 @@ export function runAdminCommand(cmd: AdminCommand, ctx: AdminContext): { ok: boo
       ctx.saveSettings();
       return { ok: true, message: `Budget $${v.toFixed(2)}/hour` };
     }
+    case "setNews":
+      ctx.settings.newsEnabled = !!cmd.enabled;
+      ctx.saveSettings();
+      return { ok: true, message: ctx.settings.newsEnabled ? "Travellers bring news" : "No outside news" };
+    case "setBigMoments":
+      ctx.settings.bigMomentsEnabled = !!cmd.enabled;
+      ctx.saveSettings();
+      return { ok: true, message: ctx.settings.bigMomentsEnabled ? "Chronicle on" : "Chronicle off" };
+    case "setPopulationMax": {
+      const v = Math.floor(Number(cmd.value));
+      if (!Number.isFinite(v) || v < 2 || v > 30) return { ok: false, message: "Population cap must be 2-30" };
+      ctx.settings.populationMax = v;
+      ctx.saveSettings();
+      return { ok: true, message: `Population cap ${v}` };
+    }
     default:
       return { ok: false, message: "Unknown command" };
   }

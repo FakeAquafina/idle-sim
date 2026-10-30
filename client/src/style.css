@@ -70,3 +70,18 @@ button.active { border-color: var(--accent); color: var(--accent); }
 #inbox .empty { color: var(--muted); }
 #ai.warn { color: #f0a8a6; }
 @media (max-width: 560px) { #inbox { display: none; } }
+
+button.small { padding: 2px 7px; font-size: 12px; }
+button.new { border-color: var(--accent); box-shadow: 0 0 6px rgba(224, 164, 88, 0.5); }
+#chronicle {
+  top: 60px; left: 50%; transform: translateX(-50%); width: min(520px, calc(100vw - 20px));
+  max-height: calc(100vh - 120px); overflow-y: auto; font-size: 13px; line-height: 1.45;
+}
+#chronicle .close { position: absolute; top: 4px; right: 6px; background: none; border: none; font-size: 16px; }
+#chronicle .page { border-top: 1px solid rgba(255,255,255,0.08); padding: 8px 0; }
+#chronicle .page-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+#chronicle .page-title { font-weight: bold; color: var(--accent); }
+#chronicle .page.obituary .page-title { color: #c9c9d9; }
+#chronicle .page-text { white-space: pre-wrap; }
+#inspector .bond { display: inline-block; margin-right: 8px; }
+#inspector .gone { color: var(--muted); font-style: italic; }

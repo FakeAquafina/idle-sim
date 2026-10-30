@@ -1,34 +1,21 @@
 import type { Goal, Villager, WorldState } from "@idle-sim/shared";
-import { pick } from "../rng.ts";
+import { beginConversation, inConversation } from "../conversation.ts";
 import { adjacentToTile, distance } from "../world.ts";
-import { say, villagerTile } from "../villager.ts";
+import { villagerTile } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
-
-// Placeholder small talk until Claude takes over conversations in Phase 3.
-const LINES = [
-  "Fine weather for it.",
-  "The storehouse looked a little bare.",
-  "My back aches from all that hauling.",
-  "Did you hear the wind last night?",
-  "We could use another pair of hands.",
-  "I had the strangest dream.",
-];
 
 export function stepTalkTo(w: WorldState, v: Villager, g: Extract<Goal, { type: "talk_to" }>): StepResult {
   const other = w.villagers.find((o) => o.id === g.villagerId && o.alive);
   if (!other) return "failed";
 
-  if (g.chatted) return !v.speech || w.clock.tick > v.speech.untilTick ? "done" : "running";
+  // Once the chat has begun, stand here until the conversation is over.
+  if (g.chatted) return inConversation(w, v.id) ? "running" : "done";
 
   if (distance(v.pos, other.pos) <= 1.6) {
     v.path = [];
-    say(w, v, pick(w, LINES));
-    say(w, other, pick(w, LINES));
-    v.needs.social = Math.min(100, v.needs.social + 20);
-    other.needs.social = Math.min(100, other.needs.social + 20);
-    v.relationships[other.id] = Math.min(100, (v.relationships[other.id] ?? 0) + 2);
-    other.relationships[v.id] = Math.min(100, (other.relationships[v.id] ?? 0) + 2);
     g.chatted = true;
+    if (inConversation(w, other.id)) return "done"; // they're already talking to someone else
+    beginConversation(w, v, other);
     return "running";
   }
 

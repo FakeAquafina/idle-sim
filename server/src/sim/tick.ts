@@ -8,12 +8,19 @@ import { emitEvent } from "./events.ts";
 import { stepGoal } from "./goals/index.ts";
 import { lapseStaleProposals, updateShortages } from "./petitions.ts";
 import { tickAnimals } from "./animals.ts";
+import { tickConversations } from "./conversation.ts";
+import { dailyPopulation, trackExposure } from "./population.ts";
 import { ageOneDay, moveAlongPath, updateNeeds } from "./villager.ts";
 import { assignHomes, distance, structureCenter, structuresWithFunction } from "./world.ts";
 
 const FAIL_COOLDOWN_TICKS = 60 * TICKS_PER_SECOND;
 
-export function tickWorld(w: WorldState): void {
+export interface TickOptions {
+  /** No arrivals or births beyond this many living villagers. */
+  populationMax?: number;
+}
+
+export function tickWorld(w: WorldState, opts: TickOptions = {}): void {
   w.clock.tick++;
   const { newDay, newSeason } = updateClock(w);
   if (newSeason) emitEvent(w, "season", `${capitalize(w.clock.season)} has come to the village.`);
@@ -24,10 +31,14 @@ export function tickWorld(w: WorldState): void {
   updateShortages(w);
   lapseStaleProposals(w);
   if (newDay) assignHomes(w);
+  if (newDay) dailyPopulation(w, opts.populationMax ?? 12);
+  tickConversations(w);
 
   for (const v of w.villagers) {
     if (!v.alive) continue;
     updateNeeds(w, v);
+    trackExposure(w, v);
+    if (!v.alive) continue;
     if (newDay) ageOneDay(v);
 
     if (!v.goal) {

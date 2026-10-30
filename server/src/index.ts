@@ -29,6 +29,12 @@ const { makeClient } = await import("./brain/claude.ts");
 const { Budget } = await import("./brain/budget.ts");
 const { Scheduler } = await import("./brain/scheduler.ts");
 const { buildSystemPrompt } = await import("./brain/prompts/system.ts");
+const { ConversationBrain } = await import("./brain/converse.ts");
+const { MemoryBrain } = await import("./brain/memory.ts");
+const { PopulationBrain } = await import("./brain/population.ts");
+const { MomentsBrain } = await import("./brain/moments.ts");
+const { NewsBrain } = await import("./news.ts");
+const { onChronicle } = await import("./sim/chronicle.ts");
 type Persona = import("./sim/villager.ts").Persona;
 
 // SIM_PORT rather than PORT: dev tools often set PORT for the Vite front end.
@@ -52,7 +58,18 @@ console.log(`[server] world loaded: seed ${world.seed}, tick ${world.clock.tick}
 // ---- AI, notifications ---------------------------------------------------------
 const client = makeClient();
 const budget = new Budget();
-const scheduler = new Scheduler({ getWorld: () => world, client, budget, getSettings: () => settings, systemPrompt: buildSystemPrompt() });
+const systemPrompt = buildSystemPrompt();
+const brainDeps = { getWorld: () => world, client, budget, getSettings: () => settings, systemPrompt };
+const scheduler = new Scheduler(brainDeps);
+new ConversationBrain(brainDeps); // registers itself as the handler for villagers meeting
+const memoryBrain = new MemoryBrain(brainDeps);
+const populationBrain = new PopulationBrain({ ...brainDeps, pool: newcomerPool });
+const moments = new MomentsBrain(brainDeps);
+const news = new NewsBrain({
+  ...brainDeps,
+  feeds: process.env.NEWS_FEEDS?.split(",").map((f) => f.trim()).filter(Boolean),
+  blocklist: process.env.NEWS_BLOCKLIST ? process.env.NEWS_BLOCKLIST.split(",").map((b) => b.trim()).filter(Boolean) : undefined,
+});
 console.log(client ? `[brain] Claude enabled (cap $${settings.budgetUsdPerHour}/hour)` : "[brain] no ANTHROPIC_API_KEY: villagers run on autopilot");
 
 const notifier = new Notifier(process.env.NTFY_URL, process.env.DISCORD_WEBHOOK);
@@ -77,12 +94,14 @@ const hub = new Hub({
   }),
 });
 
-const NOTIFY_KINDS = new Set(["petition", "arrival", "season", "built"]);
+const NOTIFY_KINDS = new Set(["petition", "arrival", "season", "built", "death", "birth", "partners", "naming"]);
 onEvent((e) => {
   hub.broadcastEvent(e);
   appendEventLog(DATA_DIR, e);
   if (NOTIFY_KINDS.has(e.kind)) notifier.send(e.text);
+  moments.onEvent(e);
 });
+onChronicle((entry) => hub.broadcastChronicle(entry));
 
 // ---- Simulation loop: wall-clock driven so 1 sim day really is 1 real hour ----
 const MAX_TICKS_PER_STEP = 2000;
@@ -96,12 +115,18 @@ setInterval(() => {
   tickAccumulator += dt * TICKS_PER_SECOND * world.speed;
   const n = Math.min(Math.floor(tickAccumulator), MAX_TICKS_PER_STEP);
   tickAccumulator -= n;
-  for (let i = 0; i < n; i++) tickWorld(world);
+  for (let i = 0; i < n; i++) tickWorld(world, { populationMax: settings.populationMax });
 }, 100);
 
 setInterval(() => hub.broadcastDelta(), 200);
 setInterval(() => saveWorld(DATA_DIR, world), 30_000);
 setInterval(() => scheduler.check(() => notifier.send("Hourly Claude budget reached; villagers are on autopilot until it resets.")), 1000);
+setInterval(() => {
+  memoryBrain.check();
+  populationBrain.check();
+  moments.check();
+  news.check();
+}, 5000);
 
 // ---- HTTP + WebSocket -------------------------------------------------------
 const app = Fastify({ logger: false });
@@ -117,6 +142,7 @@ app.get("/api/health", async () => ({
   paused: world.paused,
   speed: world.speed,
   ai: scheduler.status(),
+  news: { lastHeadlines: news.lastHeadlines, lastError: news.lastError },
 }));
 
 app.get("/api/state", async () => hub.snapshot(false).state);
