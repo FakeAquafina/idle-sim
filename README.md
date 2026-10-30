@@ -168,33 +168,42 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 
 ### First deploy
 
-On the box, once, as root: create your user and let it sudo, and allow SSH in.
+On the box, once, as root: create your user, let it sudo, and install git.
 
 ```bash
-apt update && apt install -y sudo openssh-server curl rsync
+apt update && apt install -y sudo git curl
 adduser murph && usermod -aG sudo murph
 ```
 
-Then from your Mac (or anything that can `ssh` to the box, including over
-Tailscale from work):
+Then as that user, clone the repo and run the installer:
 
 ```bash
-deploy/push.sh murph@homebox --with-env
+git clone https://github.com/FakeAquafina/idle-sim.git ~/idle-sim
+bash ~/idle-sim/deploy/install.sh
 ```
 
-That copies the code to `~/idle-sim` on the box (never touching saved worlds),
-installs Node 22, builds the viewer, installs and starts the `idle-sim` systemd
-service. `--with-env` also copies your local `server/.env` (API key, admin
-token, feeds) so the box is ready at once; without it, the installer writes a
-fresh `.env` with a random admin token and tells you to add the API key.
+The installer puts Node 22 on the box, builds the viewer, writes
+`server/.env` with a random admin token, and installs and starts the
+`idle-sim` systemd service. Then add your Claude key:
+
+```bash
+nano ~/idle-sim/server/.env        # ANTHROPIC_API_KEY=..., and NTFY_URL if you want phone pings
+sudo systemctl restart idle-sim
+```
+
+(If the repo is private, clone over SSH or use a fine-grained token with
+read access as the password; `gh auth login` on the box also works.)
 
 ### Updates
 
-Same command, without `--with-env`:
-
 ```bash
-deploy/push.sh murph@homebox
+cd ~/idle-sim && git pull && bash deploy/install.sh
 ```
+
+The installer is safe to rerun; saved worlds, settings and the event log in
+`server/data` are never touched. `deploy/push.sh user@host` still exists for
+pushing a working copy straight from a machine that can SSH to the box, without
+going through GitHub.
 
 ### Sharing the link
 
