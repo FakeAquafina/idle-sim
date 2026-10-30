@@ -2,20 +2,17 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import dotenv from "dotenv";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
 import { TICKS_PER_SECOND, type WorldState } from "@idle-sim/shared";
+import { SERVER_ROOT, loadEnv } from "./env.ts";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const SERVER_ROOT = path.resolve(here, "..");
 const DATA_DIR = path.join(SERVER_ROOT, "data");
 const CLIENT_DIST = path.resolve(SERVER_ROOT, "..", "client", "dist");
 
-// Load .env before importing anything that reads process.env at module load.
-dotenv.config({ path: path.join(SERVER_ROOT, ".env") });
+// Load the env file before importing anything that reads process.env at module load.
+const ENV_FILE = loadEnv();
 
 const { onEvent } = await import("./sim/events.ts");
 const { seedVillagers } = await import("./sim/seed.ts");
@@ -45,6 +42,7 @@ const HOST = process.env.SIM_HOST ?? "0.0.0.0";
 // loopback by default, so Caddy on this box is believed and nobody else is.
 const TRUST_PROXY = process.env.TRUST_PROXY ?? "loopback";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
+console.log(`[server] config from ${ENV_FILE}`);
 if (!ADMIN_TOKEN) console.warn("[server] ADMIN_TOKEN is not set: admin commands are disabled.");
 // Admin is only reachable from the box itself unless ADMIN_REMOTE=1 (dev convenience).
 const ALLOW_REMOTE_ADMIN = process.env.ADMIN_REMOTE === "1";

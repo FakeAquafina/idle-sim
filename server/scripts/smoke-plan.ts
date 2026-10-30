@@ -3,10 +3,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import dotenv from "dotenv";
+import { loadEnv } from "../src/env.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-dotenv.config({ path: path.join(root, ".env") });
+loadEnv();
 
 const { createWorld } = await import("../src/sim/world.ts");
 const { seedVillagers } = await import("../src/sim/seed.ts");
@@ -19,7 +19,7 @@ const { costOf } = await import("../src/brain/budget.ts");
 
 const client = makeClient();
 if (!client) {
-  console.error("No ANTHROPIC_API_KEY in server/.env");
+  console.error("No ANTHROPIC_API_KEY in the env file");
   process.exit(1);
 }
 const personas = JSON.parse(readFileSync(path.join(root, "data/villagers.json"), "utf8"));

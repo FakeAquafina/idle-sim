@@ -1,16 +1,15 @@
 // Dev helper: send one admin command to the running server from the terminal.
-// Reads ADMIN_TOKEN from server/.env; the token is never printed.
+// Reads ADMIN_TOKEN from the env file (/etc/idle-sim/env on a deployed box,
+// server/.env in development); the token is never printed.
 //   npx tsx scripts/admin.ts '{"cmd":"speed","value":20}'
 //   npx tsx scripts/admin.ts '{"cmd":"rumor","text":"The river is rising."}'
 import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import { envFile } from "../src/env.ts";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const env = readFileSync(path.join(root, ".env"), "utf8");
+const env = readFileSync(envFile(), "utf8");
 const token = env.match(/^ADMIN_TOKEN=(.*)$/m)?.[1]?.trim();
-if (!token) throw new Error("no ADMIN_TOKEN in server/.env");
+if (!token) throw new Error(`no ADMIN_TOKEN in ${envFile()}`);
 const command = JSON.parse(process.argv[2] ?? "{}");
 const port = process.env.SIM_PORT ?? 3000;
 

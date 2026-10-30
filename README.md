@@ -52,7 +52,8 @@ The world is meant to hold everything the village needs, if people work for it:
 
 ## Claude-driven villagers
 
-With `ANTHROPIC_API_KEY` set in `server/.env`, each villager asks Claude
+With `ANTHROPIC_API_KEY` set in the env file (`server/.env` in development,
+`/etc/idle-sim/env` on a deployed box), each villager asks Claude
 (`claude-haiku-5-5`) what to do roughly every two real minutes, or sooner when
 idle. Claude returns a structured decision (action, something to say, a memory
 note, optionally a petition) which the server validates against the world before
@@ -81,7 +82,7 @@ silence. Admins can also drop unprompted gifts and whisper rumors that villagers
 will gossip about for a couple of days.
 
 Optional notifications: set `NTFY_URL` (e.g. `https://ntfy.sh/your-topic`) or
-`DISCORD_WEBHOOK` in `server/.env` to get a message when a petition is made, a
+`DISCORD_WEBHOOK` in the env file to get a message when a petition is made, a
 newcomer arrives, someone is born or dies, a couple forms, a building is named,
 a season turns, or the hourly budget is hit (batched, at most one message per
 minute).
@@ -136,7 +137,7 @@ appends every event to `server/data/events.jsonl`.
 cd server
 npx tsx scripts/smoke-plan.ts 2            # one real Claude call per villager, printed
 npx tsx scripts/make-world.ts --seeds 0    # fresh world.json with chosen stock (stop the server first)
-npx tsx scripts/admin.ts '{"cmd":"speed","value":20}'   # any admin command, token read from .env
+npx tsx scripts/admin.ts '{"cmd":"speed","value":20}'   # any admin command, token read from the env file
 ```
 
 ## Tests
@@ -184,11 +185,12 @@ bash ~/idle-sim/deploy/install.sh
 ```
 
 The installer puts Node 22 on the box, builds the viewer, writes
-`server/.env` with a random admin token, and installs and starts the
-`idle-sim` systemd service. Then add your Claude key:
+`/etc/idle-sim/env` with a random admin token (root-owned, readable only by
+root and your user, outside the checkout so updates can never touch it), and
+installs and starts the `idle-sim` systemd service. Then add your Claude key:
 
 ```bash
-nano ~/idle-sim/server/.env        # ANTHROPIC_API_KEY=..., and NTFY_URL if you want phone pings
+sudo nano /etc/idle-sim/env        # ANTHROPIC_API_KEY=..., and NTFY_URL if you want phone pings
 sudo systemctl restart idle-sim
 ```
 
@@ -221,7 +223,7 @@ read-only by construction:
 - **Admin commands are only honoured from the box itself.** The WebSocket hub
   checks the connection's address; from anywhere else the admin token is
   ignored, even if it leaks. The viewer also never sends or stores a token
-  unless it was opened on `localhost`. (Set `ADMIN_REMOTE=1` in `server/.env`
+  unless it was opened on `localhost`. (Set `ADMIN_REMOTE=1` in the env file
   to turn this off; don't on a public box.)
 - Viewers can't change anything; they receive world state and events only.
   The API key, admin token and notification URLs never leave the server.
@@ -264,7 +266,7 @@ Then make Node listen only on loopback, so the only ways in are Caddy and an
 SSH tunnel:
 
 ```bash
-nano ~/idle-sim/server/.env                 # SIM_HOST=127.0.0.1
+sudo nano /etc/idle-sim/env                 # SIM_HOST=127.0.0.1
 sudo systemctl restart idle-sim
 ```
 
@@ -282,6 +284,6 @@ If you'd rather not open router ports at all, a **Cloudflare Tunnel** or
 ```bash
 systemctl status idle-sim          # is it up
 journalctl -u idle-sim -f          # live log: Claude calls, chats, news, chronicle
-sudo systemctl restart idle-sim    # after editing ~/idle-sim/server/.env
+sudo systemctl restart idle-sim    # after editing /etc/idle-sim/env
 cp -r ~/idle-sim/server/data ~/village-backup-$(date +%F)   # back up the world
 ```

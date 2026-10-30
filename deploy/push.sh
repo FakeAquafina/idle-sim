@@ -5,7 +5,8 @@
 #
 #   deploy/push.sh pi@homebox              # copy code, install/update, restart
 #   deploy/push.sh pi@homebox --with-env   # also copy your local server/.env
-#                                          # (API key + admin token) to the box
+#                                          # (API key + admin token); the installer
+#                                          # moves it to /etc/idle-sim/env on the box
 #
 # Saved worlds, settings and the event log on the box are never overwritten.
 set -euo pipefail

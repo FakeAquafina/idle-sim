@@ -5,9 +5,10 @@
 #   bash ~/idle-sim/deploy/install.sh
 #
 # It is safe to run again after every update: it installs Node 22 if missing,
-# installs dependencies, builds the viewer, creates server/.env on first run,
-# installs the systemd service and (re)starts it. sudo is used only for apt,
-# Node and systemd. Nothing in server/data is ever touched.
+# installs dependencies, builds the viewer, creates /etc/idle-sim/env on first
+# run (moving a server/.env there if one exists), installs the systemd service
+# and (re)starts it. sudo is used for apt, Node, the env file and systemd.
+# Nothing in server/data is ever touched.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -44,18 +45,24 @@ npm ci --no-audit --no-fund
 say "Building the viewer"
 npm run build
 
-# ---- Config -----------------------------------------------------------------------
-ENV_FILE="$DIR/server/.env"
+# ---- Config: /etc/idle-sim/env, outside the checkout ---------------------------------
+ENV_FILE=/etc/idle-sim/env
 if [ ! -f "$ENV_FILE" ]; then
-  say "Creating server/.env with a fresh admin token"
-  TOKEN="$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)"
-  sed -e "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN=$TOKEN|" "$DIR/.env.example" > "$ENV_FILE"
-  chmod 600 "$ENV_FILE"
-  NEED_KEY=1
-else
-  NEED_KEY=0
-  grep -q '^ANTHROPIC_API_KEY=.\+' "$ENV_FILE" || NEED_KEY=1
+  if [ -f "$DIR/server/.env" ]; then
+    say "Moving server/.env to $ENV_FILE (needs sudo)"
+    sudo install -D -o root -g "$RUN_USER" -m 640 "$DIR/server/.env" "$ENV_FILE"
+    rm -f "$DIR/server/.env"
+  else
+    say "Creating $ENV_FILE with a fresh admin token (needs sudo)"
+    TOKEN="$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)"
+    TMP="$(mktemp)"
+    sed -e "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN=$TOKEN|" "$DIR/.env.example" > "$TMP"
+    sudo install -D -o root -g "$RUN_USER" -m 640 "$TMP" "$ENV_FILE"
+    rm -f "$TMP"
+  fi
 fi
+NEED_KEY=0
+grep -q '^ANTHROPIC_API_KEY=.\+' "$ENV_FILE" || NEED_KEY=1
 mkdir -p "$DIR/server/data"
 
 # ---- systemd ----------------------------------------------------------------------
@@ -80,8 +87,8 @@ if [ "$NEED_KEY" = 1 ]; then
   cat <<EOF
 
 NEXT: villagers are on autopilot until the server has a Claude key.
-  nano $ENV_FILE          # fill in ANTHROPIC_API_KEY (and NTFY_URL if you want phone pings)
+  sudo nano $ENV_FILE     # fill in ANTHROPIC_API_KEY (and NTFY_URL if you want phone pings)
   sudo systemctl restart $SERVICE
-Your admin token is in that file too; open the site with ?token=... once.
+Your admin token is in that file too (for scripts/admin.ts and the SSH-tunnel admin UI).
 EOF
 fi

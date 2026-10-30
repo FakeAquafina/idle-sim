@@ -13,6 +13,8 @@ ExecStart=__NPM__ run start
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
+# Secrets live outside the checkout, root-owned, readable by the service user.
+EnvironmentFile=-/etc/idle-sim/env
 # Give the server time to save the world on shutdown.
 TimeoutStopSec=20
 # Modest hardening: no privilege escalation, private /tmp, only the data folder writable.
