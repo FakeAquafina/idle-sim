@@ -38,6 +38,16 @@ export interface Animal {
 
 export type Inventory = Partial<Record<ResourceKind, number>>;
 
+/** Something a traveller brought home that changes how the village lives. */
+export type DiscoveryEffect = "sharp_axes" | "fish_nets" | "stone_wedges" | "seed_lore" | "warm_cloaks" | "salt_cure" | "road_songs";
+
+export interface Discovery {
+  effect: DiscoveryEffect;
+  tick: number;
+  /** Who brought it back. */
+  finderId: string;
+}
+
 /** A travelling merchant: walks in from the north road, trades with the market stall, leaves again. */
 export interface Merchant {
   pos: Vec2;
@@ -105,7 +115,8 @@ export type GoalType =
   | "tame"
   | "mine"
   | "donate"
-  | "trade";
+  | "trade"
+  | "journey";
 
 export type Goal =
   | { type: "wander"; target: Vec2 }
@@ -130,6 +141,7 @@ export type Goal =
   | { type: "rest"; structureId?: string }
   | { type: "eat"; from?: "home" | "store" | "market" }
   | { type: "donate"; resource: ResourceKind; amount: number; phase: "fetching" | "delivering" }
+  | { type: "journey"; target: Vec2 }
   | { type: "trade"; side: "buy" | "sell"; resource: ResourceKind; amount: number; phase: "fetching" | "to_market" }
   | { type: "talk_to"; villagerId: string; chatted: boolean }
   | { type: "socialize_at"; structureId: string; untilTick: number }
@@ -183,6 +195,10 @@ export interface Villager {
   deathCause?: string;
   /** Who chose the current goal. */
   source: "ai" | "autopilot";
+  /** Off the map on a journey. returnTick null means they will not be coming back (nobody knows yet). */
+  away?: { sinceTick: number; returnTick: number | null };
+  /** Left on a journey and never returned: gone from the village, but not dead. */
+  departed?: boolean;
   /** Claude's latest private reasoning (shown in the inspector). */
   lastThought?: string;
 }
@@ -221,7 +237,7 @@ export interface ChronicleEntry {
   id: number;
   tick: number;
   day: number;
-  kind: "day" | "obituary" | "welcome" | "naming" | "discovery";
+  kind: "day" | "obituary" | "welcome" | "naming" | "discovery" | "journey";
   title: string;
   text: string;
 }
@@ -250,6 +266,9 @@ export interface WorldState {
   storehouse: Record<ResourceKind, number>;
   merchant?: Merchant;
   lastMerchantTick?: number;
+  /** What travellers have brought home, in the order it was found. */
+  discoveries: Discovery[];
+  lastJourneyTick?: number;
   /** The merchant has once told the camp to build a stall. */
   merchantHinted?: boolean;
   /** Tick at which each resource first dropped below its petition threshold (absent = not short). */

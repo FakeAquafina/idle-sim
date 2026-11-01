@@ -1,6 +1,6 @@
 // WebSocket client plus a local mirror of the world that deltas are applied to.
 
-import type { AdminCommand, ChronicleEntry, ClientMessage, DeltaMessage, ServerMessage, SnapshotMessage, WorldEvent } from "@idle-sim/shared";
+import type { AdminCommand, ChronicleEntry, ClientMessage, DeltaMessage, Proposal, ServerMessage, SnapshotMessage, WorldEvent } from "@idle-sim/shared";
 
 import type { AiStatus, ServerInfo, Settings } from "@idle-sim/shared";
 
@@ -8,12 +8,14 @@ export type MirrorState = SnapshotMessage["state"];
 
 export class Mirror {
   state: MirrorState | null = null;
+  proposals: Proposal[] = [];
   settings: Settings | null = null;
   ai: AiStatus | null = null;
   server: ServerInfo | null = null;
 
   applySnapshot(msg: SnapshotMessage): void {
     this.state = msg.state;
+    this.proposals = msg.proposals ?? [];
     this.settings = msg.settings;
     this.ai = msg.ai;
     this.server = msg.server;
@@ -31,9 +33,11 @@ export class Mirror {
     s.structures = msg.structures;
     s.animals = msg.animals;
     s.merchant = msg.merchant;
+    s.discoveries = msg.discoveries ?? [];
     for (const { i, tile } of msg.tiles) s.tiles[i] = tile;
     s.petitions = msg.petitions;
     s.rumors = msg.rumors;
+    this.proposals = msg.proposals ?? [];
     this.settings = msg.settings;
     this.ai = msg.ai;
     return msg.tiles.length > 0;

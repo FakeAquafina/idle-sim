@@ -1,7 +1,7 @@
 import { FARM_YIELD, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
 import { addTo, hasStorehouse, takeFromHousehold } from "../stock.ts";
-import { adjacentToStructure } from "../world.ts";
+import { adjacentToStructure, discoveryBonus } from "../world.ts";
 import { remember } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
@@ -30,7 +30,7 @@ export function stepFarm(w: WorldState, v: Villager, g: Extract<Goal, { type: "f
     // The harvest belongs to whoever brings it in.
     const bonus = v.skill === "farmer" ? 2 : 0;
     addTo(v.stock, "food", FARM_YIELD + bonus);
-    addTo(v.stock, "seeds", 1);
+    addTo(v.stock, "seeds", discoveryBonus(w, "seed_lore") > 1 ? 2 : 1);
     s.growth = undefined;
     emitEvent(w, "harvest", `${v.name} harvested ${FARM_YIELD + bonus} food.`, { villagerIds: [v.id], pos: { x: s.x, y: s.y } });
     remember(v, "I brought in a harvest.");

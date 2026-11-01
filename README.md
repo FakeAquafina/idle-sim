@@ -110,7 +110,17 @@ breaks up. Open requests appear in the **Shrine petitions** panel, with
 gatherings still collecting voices shown underneath.
 Admins can grant, half-grant, grant with a whispered message, or deny. Gifts
 appear as a crate by the storehouse, or are shared out among the bundles at the
-camp while there is none; villagers remember both answers and silence. Admins can also drop unprompted gifts and whisper rumors that villagers
+camp while there is none; villagers remember both answers and silence.
+
+**The moderator.** An open petition also has a *Moderate* button. That sets an
+Opus moderator on it: it reads the village's situation and writes a proposal
+for how the world itself might grow in answer (a new building, a new rule, a
+new kind of event), with a line for the chronicle, risks, and notes for the
+developer. The proposal appears in the petitions panel for you to approve or
+set aside, and you get a phone notification if those are on. Approving writes
+it to `docs/proposals/` in the checkout on the box; nothing in the running
+world changes until you start a Claude Code session and ask it to implement
+that file. Each proposal is one Opus call (a few cents), only when you ask. Admins can also drop unprompted gifts and whisper rumors that villagers
 will gossip about for a couple of days.
 
 Optional notifications: set `NTFY_URL` (e.g. `https://ntfy.sh/your-topic`) or
@@ -135,6 +145,14 @@ minute).
   people are invented by Claude (name, traits, quirk, trade), with a spare
   persona from `server/data/newcomers.json` as the fallback. A **population cap**
   (default 20) bounds both growth and API spend.
+- **Journeys.** Now and then a grown villager (the curious ones most) shoulders
+  a pack and leaves by the north road for a few days; Claude can send someone
+  too. Most come back with coin, a little to trade and something the village
+  did not have: a better axe, knotted nets, iron wedges, seed lore, wool
+  cloaks, salt curing, road songs. Each is found once and changes how the
+  village works from then on; the chronicle lists what has been learned. One
+  in five never comes back, and after five days the village stops setting a
+  place. Only one person is away at a time, never while a blueprint waits.
 - **Memory.** Each villager keeps about twenty notes; when they pile up, Claude
   condenses the oldest dozen into a line or two.
 - **News.** About once an hour, headlines from public RSS feeds (BBC World, NPR,

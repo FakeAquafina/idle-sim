@@ -1,19 +1,7 @@
 // Tracks connected viewers and pushes world updates to them.
 
 import type { WebSocket } from "ws";
-import type {
-  AiStatus,
-  ChronicleEntry,
-  ClientMessage,
-  DeltaMessage,
-  ServerMessage,
-  ServerInfo,
-  Settings,
-  SnapshotMessage,
-  VillagerView,
-  WorldEvent,
-  WorldState,
-} from "@idle-sim/shared";
+import type { AiStatus, ChronicleEntry, ClientMessage, DeltaMessage, Proposal, ServerInfo, ServerMessage, Settings, SnapshotMessage, VillagerView, WorldEvent, WorldState } from "@idle-sim/shared";
 import { runAdminCommand, tokenMatches, type AdminContext } from "./admin.ts";
 
 interface Client {
@@ -58,6 +46,7 @@ export function isPrivateAddress(addr: string | undefined): boolean {
 export interface HubDeps {
   getWorld: () => WorldState;
   getSettings: () => Settings;
+  getProposals: () => Proposal[];
   getAi: () => AiStatus;
   adminToken: string;
   adminContext: () => AdminContext;
@@ -111,6 +100,7 @@ export class Hub {
       state: { ...rest, villagers: villagers.map(stripPath) },
       viewers: this.clients.size,
       isAdmin,
+      proposals: this.deps.getProposals(),
       settings: this.deps.getSettings(),
       ai: this.deps.getAi(),
       server: this.deps.serverInfo(),
@@ -139,9 +129,11 @@ export class Hub {
       structures: w.structures,
       animals: w.animals,
       merchant: w.merchant,
+      discoveries: w.discoveries ?? [],
       tiles,
       petitions: w.petitions,
       rumors: w.rumors,
+      proposals: this.deps.getProposals(),
       settings: this.deps.getSettings(),
       ai: this.deps.getAi(),
     };

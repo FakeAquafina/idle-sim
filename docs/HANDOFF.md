@@ -14,6 +14,8 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
 3. Conversations written by Claude, relationships, partners, births, arrivals, aging,
    deaths, memory condensing, real-world RSS headlines retold as travellers' gossip,
    Opus-written chronicle (daily page, obituaries, welcomes, building names).
+3b. Ownership economy, fresh start with a hidden shrine, market and merchant, journeys
+   with discoveries, and the Opus moderator (see decisions below).
 4. Isometric viewer with code-drawn pixel art, seasons (snowy winter), weather
    particles, night lights, tooltips, click-to-inspect, event-feed camera jumps,
    pinch zoom, phone layout, admin settings panel, live view angle (`?angle=N`),
@@ -75,12 +77,20 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
 - Claude actions grew: forage, donate, trade ("sell wood"/"buy seeds"), explore. The
   system prompt explains ownership; the villager prompt lists own/household/common stock,
   the stall, the merchant and blueprint needs.
-- Journeys (decided, not built): a villager may leave the map on a journey; some never
-  come back. Those who return bring discoveries: quality-of-life items and inventions
-  that let the village evolve.
-- Moderator (decided, not built): an Opus "moderator" can be activated on a petition to
-  write up a world-building proposal; it goes to the owner for approval, and only then is
-  a Claude Code session asked to make the changes.
+- Journeys (built; `server/src/sim/journey.ts`): a grown villager may leave by the north
+  road (`journey` goal, autopilot urge is rare and trait-weighted; Claude action `journey`;
+  `cannotJourney` holds the rules: one away at a time, adults, not hungry, 3-day gap, not
+  while a blueprint waits). Away villagers have `v.away`, sit off-map, skip needs and
+  goals, and are not drawn. 80% return after 1-3 days with coin, seeds or ore, and a
+  discovery from `DISCOVERIES` (each found once; `discoveryBonus()` in world.ts and the
+  needs code apply them). 20% never return: after 5 days `departed = true`, `alive =
+  false`, no obituary but a "journey_lost" event and a chronicle page.
+- Moderator (built; `server/src/brain/moderator.ts`, Opus 5.5, owner-triggered only):
+  admin command `moderate` on a petition → Opus writes a structured proposal
+  (`ProposalOutputSchema`) → stored in `server/data/proposals.json` and shown in the
+  petitions panel (admin only) with Approve / Set aside → approving writes
+  `docs/proposals/<id>-<slug>.md` in the checkout and pings the phone. Nothing in the
+  running world changes; the owner then asks a Claude Code session to implement the file.
 - TV: the owner has a Samsung smart TV and Rokus. `?tv=1` ambient mode is built (see
   above); next is trying it in Samsung's browser, then optionally a Tizen hosted web
   app. A Proxmox video streamer for the Rokus was judged too heavy.
@@ -113,7 +123,12 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
   opengameart.org are denied by the environment's network policy. Allow `kenney.nl` under
   the environment's network settings (or drop a pack zip into the repo) and the swap can
   proceed.
-- Economy and fresh start, then journeys and discoveries, then the moderator (see decisions).
+- The moderator has not been exercised against the real API yet (no key in the cloud
+  session): the first real proposal is worth reading closely, and the system prompt in
+  `moderator.ts` is where to tune its taste.
+- Untested on the box: a long run with Claude on under the new economy. Watch for
+  villagers hoarding (KEEP levels in `autopilot.ts`), blueprints stalling for want of a
+  contributor, and the merchant's till running dry.
 - Try TV mode on the Samsung TV's browser (`http://<box>:3000/?tv=1`); check the wake
   lock holds and the caption size reads from the sofa (`#tv` font-size in `style.css`).
   Then optionally a Tizen hosted web app. Untested on a real TV as of this handoff.

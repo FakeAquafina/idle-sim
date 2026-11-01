@@ -1,7 +1,7 @@
 // Data-driven content. Adding a new building means adding an entry here;
 // the simulation, the renderer, and (later) Claude's system prompt all read it.
 
-import type { Inventory, ResourceKind } from "./world.ts";
+import type { DiscoveryEffect, Inventory, ResourceKind } from "./world.ts";
 
 export type StructureFunction =
   | "shelter"
@@ -183,3 +183,21 @@ export const FORAGE_TICKS = 25;
 export const FORAGE_SEED_CHANCE = 0.15;
 /** How close a villager must come to a hidden landmark to find it. */
 export const DISCOVERY_RADIUS = 3.5;
+
+/** What a returning traveller may bring home. Each is found once; the village keeps it for good. */
+export const DISCOVERIES: Record<DiscoveryEffect, { name: string; text: string }> = {
+  sharp_axes: { name: "a better axe", text: "an axe head shaped the way they do it over the hills; wood comes down a third faster" },
+  fish_nets: { name: "knotted nets", text: "the knack of knotting a proper fishing net; the catch comes in much faster" },
+  stone_wedges: { name: "iron wedges", text: "iron wedges for splitting rock along the grain; stone and ore come easier" },
+  seed_lore: { name: "seed lore", text: "which hedge berries carry seed worth keeping; foraging turns up seeds twice as often and every harvest leaves more" },
+  warm_cloaks: { name: "wool cloaks", text: "the pattern for a thick wool cloak; cold bites half as hard" },
+  salt_cure: { name: "salt curing", text: "how to salt and smoke meat and fish so it keeps; food goes further" },
+  road_songs: { name: "road songs", text: "a bagful of songs from the road; evenings by the fire mean more and go further" },
+};
+/** Sim days between journeys, and how long one lasts. */
+export const JOURNEY_GAP_DAYS = 3;
+export const JOURNEY_MIN_DAYS = 1;
+export const JOURNEY_MAX_DAYS = 3;
+/** Chance a traveller never comes back; the village stops waiting after this many days. */
+export const JOURNEY_LOST_CHANCE = 0.2;
+export const JOURNEY_GIVE_UP_DAYS = 5;

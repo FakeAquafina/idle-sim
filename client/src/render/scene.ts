@@ -299,7 +299,7 @@ export class Scene {
   private updateVillagers(villagers: VillagerView[], snap: boolean): void {
     const seen = new Set<string>();
     for (const v of villagers) {
-      if (!v.alive) continue;
+      if (!v.alive || v.away) continue; // the dead and the travelling are not on the map
       seen.add(v.id);
       let look = this.villagerViews.get(v.id);
       if (!look) {

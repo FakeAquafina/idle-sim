@@ -1,12 +1,12 @@
 import { Application } from "pixi.js";
-import { STRUCTURES, type Vec2 } from "@idle-sim/shared";
+import { DISCOVERIES, STRUCTURES, type Vec2 } from "@idle-sim/shared";
 import { Mirror, type MirrorState, connect } from "./net.ts";
 import { Atmosphere } from "./render/atmosphere.ts";
 import { Camera } from "./render/camera.ts";
 import { MAX_TILE_H, MIN_TILE_H, TILE_H, projection, setTileHeight } from "./render/projection.ts";
 import { type Pick, Scene } from "./render/scene.ts";
 import { highlightSpeed, setupAdminBar, showAdminMessage, updateAdminSettings } from "./ui/admin.ts";
-import { addChronicleEntry, resetChronicle, setupChronicle } from "./ui/chronicle.ts";
+import { addChronicleEntry, resetChronicle, setLearned, setupChronicle } from "./ui/chronicle.ts";
 import { addEvent, resetFeed, setupFeed } from "./ui/feed.ts";
 import { renderInbox, setupInbox } from "./ui/inbox.ts";
 import { describeGoal, esc, farmWord, onSelectionChange, renderInspector, select } from "./ui/inspector.ts";
@@ -104,8 +104,9 @@ const conn = connect(token, {
     highlightSpeed(s.speed, s.paused);
     updateAdminSettings(msg.settings, msg.server);
     updateAi(msg.ai);
-    renderInbox(s.petitions);
+    renderInbox(s.petitions, mirror.proposals);
     resetChronicle(s.chronicle ?? []);
+    setLearned((s.discoveries ?? []).map((d) => DISCOVERIES[d.effect].name));
     if (firstSnapshot) {
       centerOnVillage();
       firstSnapshot = false;
@@ -121,7 +122,8 @@ const conn = connect(token, {
     highlightSpeed(s.speed, s.paused);
     updateAdminSettings(msg.settings);
     updateAi(msg.ai);
-    renderInbox(s.petitions);
+    renderInbox(s.petitions, mirror.proposals);
+    setLearned((s.discoveries ?? []).map((d) => DISCOVERIES[d.effect].name));
   },
   onEvent(e) {
     addEvent(e);

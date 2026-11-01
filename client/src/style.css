@@ -90,6 +90,11 @@ button.new { border-color: var(--accent); box-shadow: 0 0 6px rgba(224, 164, 88,
 #inbox .pet.lapsed .who::after { content: " · dispersed"; color: var(--muted); font-weight: normal; }
 #inbox .pet.proposed { opacity: 0.85; border-left: 2px solid var(--accent); padding-left: 6px; }
 #inbox .empty { color: var(--muted); }
+#inbox .pet.proposal { border-left: 2px solid #c9a0e8; padding-left: 6px; }
+#inbox .pet.proposal .who { color: #d9b9e8; }
+#inbox .prop-text { margin: 3px 0; }
+#inbox .prop-changes { margin: 3px 0; padding-left: 16px; }
+#inbox .pet.proposal.pending { background: rgba(201, 160, 232, 0.06); }
 #ai.warn { color: #f0a8a6; }
 
 /* Chronicle */
@@ -102,6 +107,10 @@ button.new { border-color: var(--accent); box-shadow: 0 0 6px rgba(224, 164, 88,
 #chronicle .page-title { font-weight: bold; color: var(--accent); }
 #chronicle .page.obituary .page-title { color: #c9c9d9; }
 #chronicle .page-text { white-space: pre-wrap; }
+#chronicle .page.learned .page-title { color: #9fd49a; }
+#feed .ev.k-discovery, #feed .ev.k-journey, #feed .ev.k-journey_lost { color: #e6c9a0; }
+#feed .ev.k-merchant, #feed .ev.k-trade { color: #d9c08f; }
+#tvCaption.k-discovery, #tvCaption.k-journey, #tvCaption.k-journey_lost { color: #e6c9a0; }
 
 /* Settings */
 #settings {

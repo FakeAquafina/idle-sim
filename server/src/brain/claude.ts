@@ -11,6 +11,8 @@ import type { z } from "zod/v4";
 
 export const PLAN_MODEL = "claude-haiku-5-5";
 export const STORY_MODEL = "claude-sonnet-5-5";
+/** Only for the moderator: a handful of calls, each asked for by the owner. */
+export const MODERATOR_MODEL = "claude-opus-5-5";
 
 /** Null when no API key is configured; the village then runs on autopilot. */
 export function makeClient(): Anthropic | null {
@@ -41,7 +43,7 @@ export async function requestStructured<S extends z.ZodType>(
   opts: StructuredOptions = {},
 ): Promise<StructuredResult<z.infer<S>>> {
   const model = opts.model ?? PLAN_MODEL;
-  const story = model === STORY_MODEL;
+  const story = model === STORY_MODEL || model === MODERATOR_MODEL;
   try {
     const res = await client.beta.messages.parse({
       model,

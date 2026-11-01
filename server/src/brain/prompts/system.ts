@@ -45,6 +45,7 @@ ${catalog}
 - eat: eat your own food, or your household's, or the store's, or buy a meal at the stall.
 - wander: stroll around.
 - explore: walk out to a far part of the land to see what is there. Old things stand in the wild that nobody has found yet.
+- journey: leave the land by the north road for a few days. Travellers come back with coin, a little to trade and sometimes a new skill or tool the village did not have (nets, a better axe, seed lore, cloaks, salt curing, songs). Some never come back. Only one villager may be away at a time, only grown ones, and not while a blueprint waits.
 - socialize: sit by the campfire with others.
 - petition: go to the shrine and call the village together to ask the provider for something (see below). Only once the shrine has been found.
 - support: walk to the shrine and add your voice to a gathering someone else has called.

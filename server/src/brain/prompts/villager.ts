@@ -1,6 +1,6 @@
 // Builds the per-call user message: a compact snapshot of what this villager knows.
 
-import { DAYS_PER_YEAR, STRUCTURES, type Villager, type WorldState } from "@idle-sim/shared";
+import { DAYS_PER_YEAR, DISCOVERIES, STRUCTURES, type Villager, type WorldState } from "@idle-sim/shared";
 import { describeTime } from "../../sim/clock.ts";
 import { askableNow, currentProposal, describeAsk } from "../../sim/petitions.ts";
 import { hasStorehouse, householdOf, householdStock, remainingCost } from "../../sim/stock.ts";
@@ -18,6 +18,8 @@ function describeGoal(v: Villager): string {
       return "taking surplus to the storehouse";
     case "trade":
       return g.side === "sell" ? `selling ${g.resource} at the stall` : `buying ${g.resource} at the stall`;
+    case "journey":
+      return "setting out on a journey";
     case "socialize_at":
       return "sitting by the fire";
     case "fish":
@@ -40,6 +42,14 @@ export function relationWord(score: number): string {
   if (score >= 15) return "friend";
   if (score <= -15) return "rival";
   return "acquaintance";
+}
+
+/** What travellers have brought home, and who is away now. */
+function knownLine(w: WorldState): string {
+  const known = (w.discoveries ?? []).map((d) => DISCOVERIES[d.effect].name);
+  const away = w.villagers.filter((v) => v.alive && v.away).map((v) => v.name);
+  const parts = [known.length ? `The village has learned: ${known.join(", ")}.` : "Nobody has yet brought anything new home from beyond the hills.", away.length ? `Away on a journey: ${away.join(", ")}.` : ""];
+  return parts.filter(Boolean).join(" ");
 }
 
 function stockLine(inv: Partial<Record<string, number>>): string {
@@ -103,7 +113,7 @@ Write their exchange: two to four lines, ${a.name} speaks first, alternating. Us
 
 export function buildVillagerPrompt(w: WorldState, v: Villager): string {
   const c = w.clock;
-  const alive = w.villagers.filter((x) => x.alive);
+  const alive = w.villagers.filter((x) => x.alive && !x.away);
   const years = Math.floor(v.ageDays / DAYS_PER_YEAR);
   const s = villageStock(w);
   const household = householdStock(w, v);
@@ -204,6 +214,7 @@ ${alive.length} villagers: ${others}. ${homeless} without a home.
 Between everyone the village owns ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds, ${s.ore} ore. ${storeLine} ${marketLine} ${merchantLine}
 Buildings: ${buildings || "only the camp"}. ${blueprints ? `Blueprints: ${blueprints}.` : ""} ${farmNote}
 Shrine: ${structuresWithFunction(w, "petition").length ? "found; petitions are possible." : "none found yet. Somewhere out in the land there may be old things worth finding."}
+${knownLine(w)}
 Forest: ${countResourceTiles(w, "forest") > 0 ? "yes" : "none left"}. Rock to quarry: ${countResourceTiles(w, "rock") > 0 ? "yes" : "none left"}. ${landNote}
 Near you: ${nearby || "nobody"}.
 Open petitions at the shrine: ${openCount}. ${petitionLine}${shrineNote}

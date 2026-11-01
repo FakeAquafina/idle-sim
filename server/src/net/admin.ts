@@ -33,6 +33,12 @@ export interface AdminContext {
   pickNewcomer: () => Persona | null;
   /** Nudge the AI to re-plan this villager soon. */
   poke: (villagerId: string) => void;
+  /** The Opus moderator: set it on a petition, approve or reject what it wrote. */
+  moderator: {
+    request: (petitionId: string) => { ok: boolean; message?: string };
+    approve: (proposalId: string) => { ok: boolean; message?: string };
+    reject: (proposalId: string) => { ok: boolean; message?: string };
+  };
 }
 
 export function runAdminCommand(cmd: AdminCommand, ctx: AdminContext): { ok: boolean; message?: string } {
@@ -124,6 +130,12 @@ export function runAdminCommand(cmd: AdminCommand, ctx: AdminContext): { ok: boo
       ctx.settings.notifyEnabled = !!cmd.enabled;
       ctx.saveSettings();
       return { ok: true, message: ctx.settings.notifyEnabled ? "Notifications on" : "Notifications off" };
+    case "moderate":
+      return ctx.moderator.request(cmd.petitionId);
+    case "approveProposal":
+      return ctx.moderator.approve(cmd.proposalId);
+    case "rejectProposal":
+      return ctx.moderator.reject(cmd.proposalId);
     default:
       return { ok: false, message: "Unknown command" };
   }

@@ -38,6 +38,7 @@ export function loadWorld(dir: string): WorldState | null {
     // A chat that was waiting on Claude when the server stopped gets dropped; the pair just parts ways.
     w.conversations = w.conversations.filter((c) => !c.pending);
     w.camp ??= { x: Math.floor(w.width / 2), y: Math.floor(w.height / 2) };
+    w.discoveries ??= [];
     for (const v of w.villagers) {
       v.cooldowns ??= {};
       v.stock ??= {};

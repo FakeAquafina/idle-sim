@@ -1,6 +1,6 @@
 import { CARRY_LIMIT, FISH_FOOD, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { addTo, depositInventory, homeSpot } from "../stock.ts";
-import { adjacentToStructure, shoreTiles, structuresWithFunction, workBonus } from "../world.ts";
+import { adjacentToStructure, discoveryBonus, shoreTiles, structuresWithFunction, workBonus } from "../world.ts";
 import { villagerTile } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
@@ -20,7 +20,7 @@ export function stepFish(w: WorldState, v: Villager, g: Extract<Goal, { type: "f
 
   if (g.phase === "fishing") {
     g.timer++;
-    let needed = (dock ? TICKS_PER_FISH_DOCK : TICKS_PER_FISH_BEACH) / workBonus(w);
+    let needed = (dock ? TICKS_PER_FISH_DOCK : TICKS_PER_FISH_BEACH) / workBonus(w) / discoveryBonus(w, "fish_nets");
     if (w.clock.season === "winter") needed *= 1.8;
     if (v.skill === "fisher") needed *= 0.7;
     if (g.timer >= needed) {

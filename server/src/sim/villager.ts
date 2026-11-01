@@ -7,7 +7,7 @@ import {
   type Villager,
   type WorldState,
 } from "@idle-sim/shared";
-import { distance, structuresWithFunction, structureCenter, tileCenter } from "./world.ts";
+import { discoveryBonus, distance, structuresWithFunction, structureCenter, tileCenter } from "./world.ts";
 
 export interface Persona {
   name: string;
@@ -70,14 +70,15 @@ export function isNearFire(w: WorldState, v: Villager): boolean {
 
 export function updateNeeds(w: WorldState, v: Villager): void {
   const n = v.needs;
-  n.hunger = clamp(n.hunger - 100 / (1.5 * TICKS_PER_DAY));
-  n.social = clamp(n.social - 100 / (2 * TICKS_PER_DAY));
+  // Salt curing makes food go further; road songs make company last; cloaks keep the cold out.
+  n.hunger = clamp(n.hunger - 100 / (1.5 * TICKS_PER_DAY * (discoveryBonus(w, "salt_cure") > 1 ? 1.25 : 1)));
+  n.social = clamp(n.social - 100 / (2 * TICKS_PER_DAY * (discoveryBonus(w, "road_songs") > 1 ? 1.3 : 1)));
   if (v.goal?.type !== "rest") n.energy = clamp(n.energy - 100 / (1.3 * TICKS_PER_DAY));
 
   const cold = w.clock.season === "winter" || w.clock.weather === "snow" || w.clock.weather === "storm";
   const warmSpot = isSheltered(w, v) || isNearFire(w, v);
   if (warmSpot) n.warmth = clamp(n.warmth + 100 / (0.1 * TICKS_PER_DAY));
-  else if (cold) n.warmth = clamp(n.warmth - 100 / (0.6 * TICKS_PER_DAY));
+  else if (cold) n.warmth = clamp(n.warmth - 100 / (0.6 * TICKS_PER_DAY * (discoveryBonus(w, "warm_cloaks") > 1 ? 2 : 1)));
   else n.warmth = clamp(n.warmth + 100 / (0.3 * TICKS_PER_DAY));
 }
 

@@ -10,6 +10,7 @@ import { lapseStaleProposals, updateShortages } from "./petitions.ts";
 import { tickAnimals } from "./animals.ts";
 import { tickConversations } from "./conversation.ts";
 import { tickMerchant } from "./merchant.ts";
+import { tickJourneys } from "./journey.ts";
 import { remember, say } from "./villager.ts";
 import { dailyPopulation, trackExposure } from "./population.ts";
 import { ageOneDay, moveAlongPath, updateNeeds, villagerTile } from "./villager.ts";
@@ -42,10 +43,15 @@ export function tickWorld(w: WorldState, opts: TickOptions = {}): void {
   if (newDay) dailyPopulation(w, opts.populationMax ?? 20);
   tickConversations(w);
   tickMerchant(w);
+  tickJourneys(w);
   if (w.clock.tick % 20 === 0) discoverLandmarks(w);
 
   for (const v of w.villagers) {
     if (!v.alive) continue;
+    if (v.away) {
+      if (newDay) ageOneDay(v);
+      continue; // off the map: no needs, no goals, no walking
+    }
     updateNeeds(w, v);
     trackExposure(w, v);
     if (!v.alive) continue;

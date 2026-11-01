@@ -13,6 +13,7 @@ import {
   type WorldState,
 } from "@idle-sim/shared";
 import { exploreTarget } from "../sim/autopilot.ts";
+import { cannotJourney, roadOut } from "../sim/journey.ts";
 import { emitEvent } from "../sim/events.ts";
 import { canPetition, currentProposal } from "../sim/petitions.ts";
 import { RESOURCES, foodWithinReach, hasStorehouse, householdStock } from "../sim/stock.ts";
@@ -38,6 +39,13 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
       const far = exploreTarget(w, v);
       if (!far) return { goal: null, reason: "nowhere new to walk to" };
       return { goal: { type: "wander", target: far } };
+    }
+
+    case "journey": {
+      const why = cannotJourney(w, v);
+      if (why) return { goal: null, reason: why };
+      if (w.structures.some((s) => !s.built)) return { goal: null, reason: "a blueprint is waiting; the village needs hands here" };
+      return { goal: { type: "journey", target: roadOut(w) } };
     }
 
     case "rest":

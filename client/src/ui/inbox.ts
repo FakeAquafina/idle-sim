@@ -1,4 +1,4 @@
-import type { AdminCommand, Petition } from "@idle-sim/shared";
+import type { AdminCommand, Petition, Proposal } from "@idle-sim/shared";
 import { TICKS_PER_DAY } from "@idle-sim/shared";
 
 let sendCmd: ((cmd: AdminCommand) => void) | null = null;
@@ -9,22 +9,63 @@ export function setupInbox(isAdmin: boolean, send: (cmd: AdminCommand) => void):
   lastKey = "";
 }
 
-export function renderInbox(petitions: Petition[]): void {
+export function renderInbox(petitions: Petition[], proposals: Proposal[] = []): void {
   const proposed = petitions.filter((p) => p.status === "proposed");
   const open = petitions.filter((p) => p.status === "open");
   const recent = petitions.filter((p) => p.status !== "open" && p.status !== "proposed").slice(-3).reverse();
-  const key = JSON.stringify([proposed.map((p) => p.id + p.supporters.length), open.map((p) => p.id), recent.map((p) => p.id + p.status), !!sendCmd]);
+  // Only the admin sees the moderator's work; viewers see petitions alone.
+  const shown = sendCmd ? proposals.filter((p) => p.status === "writing" || p.status === "pending" || p.status === "failed").concat(proposals.filter((p) => p.status === "approved" || p.status === "rejected").slice(-2)) : [];
+  const key = JSON.stringify([proposed.map((p) => p.id + p.supporters.length), open.map((p) => p.id), recent.map((p) => p.id + p.status), shown.map((p) => p.id + p.status), !!sendCmd]);
   if (key === lastKey) return;
   lastKey = key;
 
-  document.getElementById("inboxCount")!.textContent = open.length ? `${open.length} waiting` : "";
+  const pending = shown.filter((p) => p.status === "pending").length;
+  document.getElementById("inboxCount")!.textContent = [open.length ? `${open.length} waiting` : "", pending ? `${pending} to approve` : ""].filter(Boolean).join(" · ");
   const list = document.getElementById("inboxList")!;
   list.innerHTML = "";
-  if (!open.length && !recent.length && !proposed.length) {
+  if (!open.length && !recent.length && !proposed.length && !shown.length) {
     list.innerHTML = `<div class="empty">No one has asked for anything yet.</div>`;
     return;
   }
+  for (const p of shown) list.appendChild(renderProposal(p));
   for (const p of [...open, ...proposed, ...recent]) list.appendChild(renderPetition(p));
+}
+
+/** A moderator proposal: what Opus wrote, and the owner's approve/reject. */
+function renderProposal(p: Proposal): HTMLElement {
+  const div = document.createElement("div");
+  div.className = `pet proposal ${p.status}`;
+  if (p.status === "writing") {
+    div.innerHTML = `<div class="who">Moderator <span class="muted">· writing…</span></div><div class="reason">${esc(p.petitionText)}</div>`;
+    return div;
+  }
+  if (p.status === "failed") {
+    div.innerHTML = `<div class="who">Moderator <span class="muted">· failed</span></div><div class="reason">${esc(p.petitionText)}</div><div class="muted">${esc(p.error ?? "no answer")}</div>`;
+    return div;
+  }
+  const changes = (p.changes ?? []).map((c) => `<li><b>${esc(c.area)}</b>: ${esc(c.description)}</li>`).join("");
+  div.innerHTML = `<div class="who">Moderator: ${esc(p.title ?? "proposal")} <span class="muted">· ${p.status}</span></div>
+    <div class="reason">${esc(p.petitionText)}</div>
+    <div class="prop-text">${esc(p.summary ?? "")}</div>
+    <ul class="prop-changes">${changes}</ul>
+    ${p.flavour ? `<div class="prop-text muted"><i>${esc(p.flavour)}</i></div>` : ""}
+    ${p.risks ? `<div class="prop-text muted">Risks: ${esc(p.risks)}</div>` : ""}
+    ${p.file ? `<div class="muted">Written to ${esc(p.file)}: start a Claude Code session and ask it to implement that file.</div>` : ""}`;
+  if (p.status === "pending" && sendCmd) {
+    const send = sendCmd;
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const approve = document.createElement("button");
+    approve.textContent = "Approve";
+    approve.onclick = () => send({ cmd: "approveProposal", proposalId: p.id });
+    const reject = document.createElement("button");
+    reject.textContent = "Set aside";
+    reject.className = "danger";
+    reject.onclick = () => send({ cmd: "rejectProposal", proposalId: p.id });
+    actions.append(approve, reject);
+    div.appendChild(actions);
+  }
+  return div;
 }
 
 function renderPetition(p: Petition): HTMLElement {
@@ -74,6 +115,7 @@ function renderPetition(p: Petition): HTMLElement {
       if (message === null) return;
       send({ cmd: "deny", petitionId: p.id, message: message || undefined });
     }, "danger");
+    btn("Moderate", () => send({ cmd: "moderate", petitionId: p.id }));
     div.appendChild(actions);
   }
   return div;

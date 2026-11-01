@@ -12,7 +12,7 @@ import type { Scene } from "../render/scene.ts";
 import { esc } from "./inspector.ts";
 
 /** Events the camera cuts to and holds on for a long moment. */
-const BIG_MOMENTS = new Set(["birth", "death", "funeral", "arrival", "partners", "petition", "built", "founded", "blessing", "gift", "expecting", "naming"]);
+const BIG_MOMENTS = new Set(["birth", "death", "funeral", "arrival", "partners", "petition", "built", "founded", "blessing", "gift", "expecting", "naming", "discovery", "journey", "journey_lost", "merchant"]);
 /** Events that only earn a caption, never a camera move. */
 const CAPTION_ONLY = new Set(["day", "season", "news"]);
 const LINGER_BIG_MS = 26_000;

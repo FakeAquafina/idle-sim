@@ -16,6 +16,7 @@ import { stepTame } from "./tame.ts";
 import { stepWander } from "./wander.ts";
 import { stepDonate } from "./donate.ts";
 import { stepTrade } from "./trade.ts";
+import { stepJourney } from "./journey.ts";
 
 export type { StepResult } from "./helpers.ts";
 
@@ -40,6 +41,8 @@ export function stepGoal(w: WorldState, v: Villager): StepResult {
       return stepDonate(w, v, g);
     case "trade":
       return stepTrade(w, v, g);
+    case "journey":
+      return stepJourney(w, v, g);
     case "socialize_at":
       return stepSocializeAt(w, v, g);
     case "talk_to":

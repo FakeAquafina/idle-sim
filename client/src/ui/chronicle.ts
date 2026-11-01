@@ -21,6 +21,16 @@ export function setupChronicle(): void {
   };
 }
 
+let learned: string[] = [];
+
+/** Discoveries travellers have brought home, shown at the top of the chronicle. */
+export function setLearned(names: string[]): void {
+  const key = names.join("|");
+  if (key === learned.join("|")) return;
+  learned = names;
+  if (open) render();
+}
+
 export function resetChronicle(list: ChronicleEntry[]): void {
   entries = [...list];
   updateCount();
@@ -44,11 +54,12 @@ function updateCount(): void {
 function render(): void {
   document.getElementById("chronicleBtn")!.classList.remove("new");
   const body = document.getElementById("chronicleBody")!;
+  const learnedHtml = learned.length ? `<div class="page learned"><span class="page-title">What the village has learned</span><div class="page-text">${learned.map(esc).join(" · ")}</div></div>` : "";
   if (!entries.length) {
-    body.innerHTML = `<div class="muted">Nothing has been written yet. The chronicler writes a page at the end of each village day, and marks births, arrivals, deaths and the naming of buildings.</div>`;
+    body.innerHTML = `${learnedHtml}<div class="muted">Nothing has been written yet. The chronicler writes a page at the end of each village day, and marks births, arrivals, deaths, journeys and the naming of buildings.</div>`;
     return;
   }
-  body.innerHTML = [...entries]
+  body.innerHTML = learnedHtml + [...entries]
     .reverse()
     .map(
       (e) => `<div class="page ${e.kind}">
@@ -60,7 +71,7 @@ function render(): void {
 }
 
 function label(e: ChronicleEntry): string {
-  const kind = { day: "", obituary: "in memoriam · ", welcome: "welcome · ", naming: "naming · ", discovery: "a discovery · " }[e.kind];
+  const kind = { day: "", obituary: "in memoriam · ", welcome: "welcome · ", naming: "naming · ", discovery: "a discovery · ", journey: "the road · " }[e.kind];
   return `${kind}day ${e.day + 1}`;
 }
 

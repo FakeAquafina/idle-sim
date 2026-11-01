@@ -28,9 +28,18 @@ function hub(allowRemoteAdmin = false) {
   return new Hub({
     getWorld: () => world,
     getSettings: () => settings,
+    getProposals: () => [],
     getAi: () => ({ enabled: true, keyPresent: false, spentHourUsd: 0, capUsd: 0, callsHour: 0, inflight: 0 }),
     adminToken: "secret",
-    adminContext: () => ({ world, settings, reset: () => {}, saveSettings: () => {}, pickNewcomer: () => null, poke: () => {} }),
+    adminContext: () => ({
+      world,
+      settings,
+      reset: () => {},
+      saveSettings: () => {},
+      pickNewcomer: () => null,
+      poke: () => {},
+      moderator: { request: () => ({ ok: false }), approve: () => ({ ok: false }), reject: () => ({ ok: false }) },
+    }),
     serverInfo: () => ({ notifyConfigured: false, defaultFeeds: [] }),
     allowRemoteAdmin,
   });

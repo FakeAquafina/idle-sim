@@ -10,6 +10,7 @@ import { CARRY_LIMIT, MARKET_MARGIN, PRICES, STRUCTURES, type Goal, type GoalTyp
 import { emitEvent } from "./events.ts";
 import { currentProposal, villageLacks } from "./petitions.ts";
 import { chance, randInt } from "./rng.ts";
+import { cannotJourney, roadOut } from "./journey.ts";
 import { foodWithinReach, hasStorehouse, householdStock, remainingCost } from "./stock.ts";
 import {
   canAfford,
@@ -159,6 +160,11 @@ export function chooseGoal(w: WorldState, v: Villager): Goal {
 
   if (n.social < 60 && fire && chance(w, 0.3) && ok("socialize_at")) {
     return { type: "socialize_at", structureId: fire.id, untilTick: tick + 600 };
+  }
+  // Rarely, someone feels the pull of the road itself. The curious feel it most.
+  const restless = v.traits.some((t) => /curious|restless|brave|wander|adventur|bold/i.test(t));
+  if (!w.clock.isNight && chance(w, restless ? 0.012 : 0.004) && !cannotJourney(w, v) && !blueprint) {
+    return { type: "journey", target: roadOut(w) };
   }
   // Now and then someone goes to see what lies further off.
   if (!w.clock.isNight && chance(w, 0.08)) {

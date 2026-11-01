@@ -1,6 +1,6 @@
 // The side panel for whatever was clicked: a villager or a building.
 
-import { DAYS_PER_YEAR, STRUCTURES, type Structure, type VillagerView } from "@idle-sim/shared";
+import { DAYS_PER_YEAR, STRUCTURES, TICKS_PER_DAY, type Structure, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
 
 type Selection = { kind: "villager"; id: string } | { kind: "structure"; id: string } | null;
@@ -45,7 +45,7 @@ export function renderInspector(state: MirrorState): void {
   if (!v.alive) {
     body.innerHTML = `
     <h2>${esc(v.name)}</h2>
-    <div class="row gone">${v.stage}, ${Math.floor(v.ageDays / DAYS_PER_YEAR)} years · ${esc(v.skill)} · died of ${esc(v.deathCause ?? "unknown causes")}</div>
+    <div class="row gone">${v.stage}, ${Math.floor(v.ageDays / DAYS_PER_YEAR)} years · ${esc(v.skill)} · ${v.departed ? "went over the hills and never came back" : `died of ${esc(v.deathCause ?? "unknown causes")}`}</div>
     <div class="row">${v.traits.map(esc).join(", ")}. ${esc(cap(v.quirk))}.</div>
     <div class="row"><b>Remembered:</b><ul>${v.memory.slice(-8).map((m) => `<li>${esc(m)}</li>`).join("") || "<li>little</li>"}</ul></div>`;
     return;
@@ -71,6 +71,7 @@ export function renderInspector(state: MirrorState): void {
     ${bar("hunger", v.needs.hunger)}${bar("energy", v.needs.energy)}${bar("social", v.needs.social)}${bar("warmth", v.needs.warmth)}
     <div class="row"><b>Doing:</b> ${esc(describeGoal(v))} <span class="muted">(${v.source === "ai" ? "Claude" : "autopilot"})</span></div>
     ${v.lastThought ? `<div class="row"><b>Thinking:</b> <span class="muted">${esc(v.lastThought)}</span></div>` : ""}
+    ${v.away ? `<div class="row"><i>Away on a journey since day ${Math.floor(v.away.sinceTick / TICKS_PER_DAY) + 1}.</i></div>` : ""}
     <div class="row"><b>Owns:</b> ${invText(v.stock)}${v.coins ? ` · ${v.coins} coin` : ""}</div>
     <div class="row"><b>Carrying:</b> ${invText(v.inventory)}</div>
     <div class="row"><b>Home:</b> ${home ? esc(home.name ?? "a house") : "none"}</div>
@@ -144,6 +145,7 @@ export function describeGoal(v: VillagerView): string {
     case "tame": return g.phase === "approach" ? "sneaking up on a goat" : "leading a goat to the pen";
     case "mine": return g.phase === "returning" ? "hauling from the mine" : "working the mine";
     case "support": return "going to stand at the shrine";
+    case "journey": return "setting out on a journey";
   }
 }
 

@@ -6,7 +6,7 @@ import { CARRY_LIMIT, FORAGE_SEED_CHANCE, FORAGE_TICKS, STRUCTURES, type Goal, t
 import { chance } from "../rng.ts";
 import { addTo, deliverMaterials, depositInventory, homeSpot, remainingCost } from "../stock.ts";
 import { villagerTile } from "../villager.ts";
-import { adjacentToStructure, adjacentToTile, nearestResourceTile, setTile, tileAt, workBonus } from "../world.ts";
+import { adjacentToStructure, adjacentToTile, discoveryBonus, nearestResourceTile, setTile, tileAt, workBonus } from "../world.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
 const TICKS_PER_UNIT = 20;
@@ -46,13 +46,14 @@ export function stepGather(w: WorldState, v: Villager, g: Extract<Goal, { type: 
       if (g.collectTimer >= FORAGE_TICKS / workBonus(w) / (skilled ? 1.4 : 1)) {
         g.collectTimer = 0;
         addTo(v.inventory, "food", 1);
-        if (chance(w, FORAGE_SEED_CHANCE)) addTo(v.inventory, "seeds", 1);
+        if (chance(w, FORAGE_SEED_CHANCE * (discoveryBonus(w, "seed_lore") > 1 ? 2 : 1))) addTo(v.inventory, "seeds", 1);
         if ((v.inventory.food ?? 0) >= CARRY_LIMIT) return switchToReturn(g, v);
       }
       return "running";
     }
     const skilled = (g.resource === "wood" && v.skill === "woodcutter") || (g.resource === "stone" && v.skill === "mason");
-    if (g.collectTimer >= TICKS_PER_UNIT / workBonus(w) / (skilled ? 1.4 : 1)) {
+    const tools = discoveryBonus(w, g.resource === "wood" ? "sharp_axes" : "stone_wedges");
+    if (g.collectTimer >= TICKS_PER_UNIT / workBonus(w) / tools / (skilled ? 1.4 : 1)) {
       g.collectTimer = 0;
       tile.amount -= 1;
       v.inventory[g.resource] = carried + 1;

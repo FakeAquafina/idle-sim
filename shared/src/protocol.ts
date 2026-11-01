@@ -1,7 +1,7 @@
 // WebSocket messages between server and viewers.
 
-import type { Petition, PetitionAsk, Rumor } from "./actions.ts";
-import type { AiStatus, Animal, ChronicleEntry, Clock, Merchant, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
+import type { Petition, PetitionAsk, Proposal, Rumor } from "./actions.ts";
+import type { AiStatus, Animal, ChronicleEntry, Clock, Discovery, Merchant, ResourceKind, Settings, Structure, Tile, Villager, WorldEvent, WorldState } from "./world.ts";
 
 /** Villager as sent over the wire: same as Villager but without the path. */
 export type VillagerView = Omit<Villager, "path">;
@@ -11,6 +11,8 @@ export interface SnapshotMessage {
   state: Omit<WorldState, "villagers" | "dirtyTiles" | "rngState"> & { villagers: VillagerView[] };
   viewers: number;
   isAdmin: boolean;
+  /** Moderator proposals awaiting (or past) the owner's decision. */
+  proposals: Proposal[];
   settings: Settings;
   ai: AiStatus;
   /** Facts about the server a viewer cannot change but the admin panel shows. */
@@ -34,9 +36,11 @@ export interface DeltaMessage {
   structures: Structure[];
   animals: Animal[];
   merchant?: Merchant;
+  discoveries: Discovery[];
   tiles: { i: number; tile: Tile }[];
   petitions: Petition[];
   rumors: Rumor[];
+  proposals: Proposal[];
   settings: Settings;
   ai: AiStatus;
 }
@@ -80,7 +84,10 @@ export type AdminCommand =
   | { cmd: "setBigMoments"; enabled: boolean }
   | { cmd: "setPopulationMax"; value: number }
   | { cmd: "setNewsFeeds"; feeds: string[] }
-  | { cmd: "setNotify"; enabled: boolean };
+  | { cmd: "setNotify"; enabled: boolean }
+  | { cmd: "moderate"; petitionId: string }
+  | { cmd: "approveProposal"; proposalId: string }
+  | { cmd: "rejectProposal"; proposalId: string };
 
 export interface AdminMessage {
   type: "admin";

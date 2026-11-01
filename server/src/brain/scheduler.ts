@@ -67,7 +67,7 @@ export class Scheduler {
 
     const now = Date.now();
     const candidates = w.villagers
-      .filter((v) => v.alive && !this.inflight.has(v.id) && !inConversation(w, v.id))
+      .filter((v) => v.alive && !v.away && !this.inflight.has(v.id) && !inConversation(w, v.id))
       .filter((v) => now - (this.lastPlanAt.get(v.id) ?? 0) >= MIN_INTERVAL_MS)
       .filter((v) => this.poked.has(v.id) || v.goal === null || v.source === "autopilot" || now - (this.lastPlanAt.get(v.id) ?? 0) >= PERIOD_MS)
       .sort((a, b) => (this.lastPlanAt.get(a.id) ?? 0) - (this.lastPlanAt.get(b.id) ?? 0));

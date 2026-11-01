@@ -1,7 +1,7 @@
 import { CARRY_LIMIT, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
 import { addTo, depositInventory, homeSpot } from "../stock.ts";
-import { adjacentToStructure, workBonus } from "../world.ts";
+import { adjacentToStructure, discoveryBonus, workBonus } from "../world.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
 const TICKS_PER_UNIT = 25;
@@ -28,7 +28,7 @@ export function stepMine(w: WorldState, v: Villager, g: Extract<Goal, { type: "m
       return carried > 0 ? toHome(g, v) : "failed";
     }
     g.timer++;
-    const needed = TICKS_PER_UNIT / workBonus(w) / (v.skill === "mason" || v.skill === "miner" ? 1.4 : 1);
+    const needed = TICKS_PER_UNIT / workBonus(w) / discoveryBonus(w, "stone_wedges") / (v.skill === "mason" || v.skill === "miner" ? 1.4 : 1);
     if (g.timer >= needed) {
       g.timer = 0;
       // Every fourth unit is ore while the vein has any.

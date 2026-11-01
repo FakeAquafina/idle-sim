@@ -4,7 +4,7 @@
 
 import { z } from "zod/v4";
 
-export const PLAN_ACTIONS = ["build", "farm", "gather", "forage", "fish", "hunt", "tame", "mine", "donate", "trade", "talk_to", "rest", "eat", "wander", "explore", "socialize", "petition", "support"] as const;
+export const PLAN_ACTIONS = ["build", "farm", "gather", "forage", "fish", "hunt", "tame", "mine", "donate", "trade", "talk_to", "rest", "eat", "wander", "explore", "journey", "socialize", "petition", "support"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 
 export const PETITION_ASKS = ["wood", "stone", "food", "seeds", "newcomer", "blessing"] as const;
@@ -118,3 +118,43 @@ export const PETITION_NEED_THRESHOLD: Record<"wood" | "stone" | "food" | "seeds"
 export const SHORTAGE_DAYS_BEFORE_PETITION = 0.5;
 /** Sim days between petitions (counted from the last one opening or lapsing). */
 export const PETITION_COOLDOWN_DAYS = 2;
+
+// ---- The moderator ---------------------------------------------------------------
+// An Opus "moderator" can be set on a petition. It writes up a proposal for how the
+// world itself might grow in answer; the owner approves or rejects it; an approved
+// proposal is written to docs/proposals/ for a Claude Code session to build.
+
+export const PROPOSAL_AREAS = ["world", "buildings", "economy", "people", "story", "viewer"] as const;
+
+export const ProposalOutputSchema = z.object({
+  title: z.string().describe("A short title for the proposal, under 60 characters."),
+  summary: z.string().describe("Two or three sentences: what the village is asking for underneath the words, and what you propose the world should gain."),
+  changes: z
+    .array(
+      z.object({
+        area: z.enum(PROPOSAL_AREAS),
+        description: z.string().describe("One concrete change to the simulation, in plain language a developer can build from. One or two sentences."),
+      }),
+    )
+    .min(1)
+    .max(6),
+  flavour: z.string().describe("Two or three sentences in the chronicle's voice that could be read aloud in the village when this comes to pass."),
+  risks: z.string().describe("One or two sentences on what could go wrong for balance, cost or tone."),
+  implementation_notes: z.string().describe("Short notes for the developer: which parts of the system this touches, and how to keep it simple."),
+});
+export type ProposalOutput = z.infer<typeof ProposalOutputSchema>;
+
+export type ProposalStatus = "writing" | "pending" | "approved" | "rejected" | "failed";
+
+export interface Proposal extends Partial<ProposalOutput> {
+  id: string;
+  petitionId: string;
+  /** Who asked, and for what, at the time the moderator was called. */
+  petitionText: string;
+  createdAt: number;
+  status: ProposalStatus;
+  decidedAt?: number;
+  /** Repo-relative path of the approved write-up. */
+  file?: string;
+  error?: string;
+}

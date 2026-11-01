@@ -5,6 +5,7 @@ import {
   STRUCTURES,
   tileIndex,
   type Animal,
+  type DiscoveryEffect,
   type Inventory,
   type ResourceKind,
   type Structure,
@@ -43,6 +44,7 @@ export function createWorld(seed: number, width = DEFAULT_SIZE, height = DEFAULT
     rumors: [],
     conversations: [],
     chronicle: [],
+    discoveries: [],
   };
   generateTerrain(w);
   placeShrine(w);
@@ -427,6 +429,11 @@ function strikeVein(w: WorldState, s: Structure): void {
 /** 1.25 once a workshop stands: everyone works faster. */
 export function workBonus(w: WorldState): number {
   return structuresWithFunction(w, "crafting").length > 0 ? 1.25 : 1;
+}
+
+/** Speed-up from something a traveller brought home (see DISCOVERIES). */
+export function discoveryBonus(w: WorldState, effect: DiscoveryEffect): number {
+  return (w.discoveries ?? []).some((d) => d.effect === effect) ? 1.35 : 1;
 }
 
 /** Spiral outward from `near` looking for a legal spot. */

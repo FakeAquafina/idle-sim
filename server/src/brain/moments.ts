@@ -59,6 +59,13 @@ export class MomentsBrain {
         this.enqueue(() => this.discoveryPage(e.text, e.villagerIds?.[0]));
         break;
       }
+      case "journey":
+      case "journey_lost": {
+        if (e.kind === "journey" && !e.text.includes("comes back")) break; // setting out is not yet a story
+        const kind = e.kind;
+        this.enqueue(() => this.journeyPage(e.text, e.villagerIds?.[0], kind === "journey_lost"));
+        break;
+      }
       case "built": {
         const s = w.structures.find((x) => e.pos && x.x === e.pos.x && x.y === e.pos.y && x.built);
         if (s && NAMED_KINDS.has(s.kind) && !s.name) this.enqueue(() => this.nameBuilding(s.id));
@@ -192,9 +199,26 @@ Write two or three sentences for the chronicle on their arrival (where they migh
     const prompt = `## A discovery
 ${this.villageFacts(w)}
 ${text}${finder ? ` ${finder.name} is ${finder.stage}, a ${finder.skill}; traits: ${finder.traits.join(", ")}; quirk: ${finder.quirk}.` : ""}
-Write two or three sentences for the chronicle on the finding of the shrine: what it looked like, what the finder felt, what the village made of it. Give it a short title.`;
+Write two or three sentences for the chronicle on this discovery: what it was like, what the finder felt, what the village made of it. Give it a short title.`;
     const page = await this.ask(prompt, PageSchema, 800);
-    addChronicleEntry(this.deps.getWorld(), "discovery", page?.title ?? "An old shrine", page?.text ?? fallback);
+    addChronicleEntry(this.deps.getWorld(), "discovery", page?.title ?? "A discovery", page?.text ?? fallback);
+  }
+
+  private async journeyPage(text: string, travellerId?: string, lost = false): Promise<void> {
+    const w = this.deps.getWorld();
+    const v = w.villagers.find((x) => x.id === travellerId);
+    const fallback = text;
+    const title = v ? (lost ? `${v.name}, who went north` : `${v.name} comes home`) : "The road";
+    if (!this.canWrite()) {
+      addChronicleEntry(w, "journey", title, fallback);
+      return;
+    }
+    const prompt = `## ${lost ? "Someone who never came back" : "A traveller returns"}
+${this.villageFacts(w)}
+${text}${v ? ` ${v.name} is ${v.stage}, a ${v.skill}; traits: ${v.traits.join(", ")}; quirk: ${v.quirk}.${v.partnerId ? ` Partner: ${w.villagers.find((o) => o.id === v.partnerId)?.name}.` : ""}` : ""}
+Write two or three sentences for the chronicle${lost ? ": what the village says about the one who did not return, without knowing their fate" : ": the homecoming, the stories told by the fire, and what was brought back"}. Give it a short title.`;
+    const page = await this.ask(prompt, PageSchema, 800);
+    addChronicleEntry(this.deps.getWorld(), "journey", page?.title ?? title, page?.text ?? fallback);
   }
 
   private async nameBuilding(id: string): Promise<void> {

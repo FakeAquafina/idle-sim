@@ -31,6 +31,7 @@ const { MemoryBrain } = await import("./brain/memory.ts");
 const { PopulationBrain } = await import("./brain/population.ts");
 const { MomentsBrain } = await import("./brain/moments.ts");
 const { NewsBrain, DEFAULT_FEEDS } = await import("./news.ts");
+const { Moderator } = await import("./brain/moderator.ts");
 const { onChronicle } = await import("./sim/chronicle.ts");
 type Persona = import("./sim/villager.ts").Persona;
 
@@ -77,6 +78,14 @@ const news = new NewsBrain({
   blocklist: process.env.NEWS_BLOCKLIST ? process.env.NEWS_BLOCKLIST.split(",").map((b) => b.trim()).filter(Boolean) : undefined,
 });
 console.log(client ? `[brain] Claude enabled (cap $${settings.budgetUsdPerHour}/hour)` : "[brain] no ANTHROPIC_API_KEY: villagers run on autopilot");
+const moderator = new Moderator({
+  getWorld: () => world,
+  client,
+  budget,
+  dataDir: DATA_DIR,
+  repoRoot: path.resolve(SERVER_ROOT, ".."),
+  notify: (text) => settings.notifyEnabled && notifier.send(text),
+});
 
 const notifier = new Notifier(process.env.NTFY_URL, process.env.DISCORD_WEBHOOK);
 console.log(notifier.enabled ? "[notify] notifications on" : "[notify] no NTFY_URL / DISCORD_WEBHOOK: notifications off");
@@ -84,6 +93,7 @@ console.log(notifier.enabled ? "[notify] notifications on" : "[notify] no NTFY_U
 const hub = new Hub({
   getWorld: () => world,
   getSettings: () => settings,
+  getProposals: () => moderator.list(),
   getAi: () => scheduler.status(),
   adminToken: ADMIN_TOKEN,
   adminContext: () => ({
@@ -97,6 +107,7 @@ const hub = new Hub({
     saveSettings: () => saveSettings(DATA_DIR, settings),
     pickNewcomer: () => newcomerPool.find((p) => !world.villagers.some((v) => v.name === p.name)) ?? null,
     poke: (id) => scheduler.poke(id),
+    moderator: { request: (id) => moderator.request(id), approve: (id) => moderator.approve(id), reject: (id) => moderator.reject(id) },
   }),
   serverInfo: () => ({ notifyConfigured: notifier.enabled, defaultFeeds: envFeeds?.length ? envFeeds : DEFAULT_FEEDS }),
   allowRemoteAdmin: ALLOW_REMOTE_ADMIN,
