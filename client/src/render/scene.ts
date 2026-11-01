@@ -322,8 +322,8 @@ export class Scene {
           const bw = Math.ceil(look.bubbleText.width) + 8;
           const bh = Math.ceil(look.bubbleText.height) + 4;
           look.bubbleBg.clear();
-          look.bubbleBg.roundRect(-bw / 2, -bh, bw, bh, 3).fill({ color: 0xfaf6ee, alpha: 0.95 });
-          look.bubbleBg.poly([-3, 0, 3, 0, 0, 3]).fill({ color: 0xfaf6ee, alpha: 0.95 });
+          look.bubbleBg.roundRect(-bw / 2, -bh, bw, bh, 3).fill({ color: 0xf4efe4, alpha: 0.78 });
+          look.bubbleBg.poly([-3, 0, 3, 0, 0, 3]).fill({ color: 0xf4efe4, alpha: 0.78 });
           look.bubbleText.position.set(-bw / 2 + 4, -bh + 2);
           look.bubbleW = bw;
           look.bubbleH = bh;
@@ -353,7 +353,7 @@ export class Scene {
     const bubbleBg = new Graphics();
     const bubbleText = new Text({
       text: "",
-      style: { fontSize: 9, fill: 0x222222, fontFamily: "ui-monospace, Menlo, monospace", wordWrap: true, wordWrapWidth: 130 },
+      style: { fontSize: 8, fill: 0x2a2622, fontFamily: "ui-monospace, Menlo, monospace", wordWrap: true, wordWrapWidth: 104 },
       resolution: 2,
     });
     bubble.addChild(bubbleBg, bubbleText);

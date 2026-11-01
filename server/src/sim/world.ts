@@ -17,7 +17,7 @@ import { makeClock } from "./clock.ts";
 import { emitEvent } from "./events.ts";
 import { chance, nextRandom, pick, randInt } from "./rng.ts";
 
-export const DEFAULT_SIZE = 48;
+export const DEFAULT_SIZE = 64;
 
 export function createWorld(seed: number, width = DEFAULT_SIZE, height = DEFAULT_SIZE): WorldState {
   const w: WorldState = {
@@ -115,7 +115,10 @@ function generateTerrain(w: WorldState) {
 
   if (w.width >= 24 && w.height >= 24) paintCoast(w);
 
-  for (let i = 0; i < 6; i++) {
+  // Feature counts were tuned on a 48×48 map; scale them with the area.
+  const scale = (w.width * w.height) / (48 * 48);
+  const n = (base: number) => Math.max(1, Math.round(base * scale));
+  for (let i = 0; i < n(6); i++) {
     const p = { x: randInt(w, 2, w.width - 3), y: randInt(w, 2, w.height - 3) };
     blob(w, p.x, p.y, 25, "dirt", () => 0);
   }
@@ -124,11 +127,11 @@ function generateTerrain(w: WorldState) {
     const p = farFromCenter();
     blob(w, p.x, p.y, 100, "water", () => 0);
   }
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < n(6); i++) {
     const p = farFromCenter();
     blob(w, p.x, p.y, 90, "forest", () => randInt(w, 8, 15));
   }
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < n(4); i++) {
     const p = farFromCenter();
     blob(w, p.x, p.y, 30, "rock", () => randInt(w, 10, 20));
   }
@@ -225,6 +228,9 @@ function footprintTouches(w: WorldState, x: number, y: number, width: number, he
   return false;
 }
 
+/** A forest tile this thin is a sapling: nobody cuts it, it is left to grow. */
+export const SAPLING_MAX = 2;
+
 /** Nearest forest/rock tile with resources left that can be reached from a neighbouring tile. */
 export function nearestResourceTile(w: WorldState, from: Vec2, kind: "forest" | "rock"): Vec2 | null {
   let best: Vec2 | null = null;
@@ -233,6 +239,7 @@ export function nearestResourceTile(w: WorldState, from: Vec2, kind: "forest" | 
     for (let x = 0; x < w.width; x++) {
       const t = w.tiles[tileIndex(w.width, x, y)];
       if (t.kind !== kind || t.amount <= 0) continue;
+      if (kind === "forest" && t.amount <= SAPLING_MAX) continue;
       const d = Math.abs(x - from.x) + Math.abs(y - from.y);
       if (d >= bestD) continue;
       if (adjacentToTile(w, { x, y }).length === 0) continue;
@@ -273,6 +280,7 @@ export function nearestWildAnimal(w: WorldState, from: Vec2, kind?: Animal["kind
   for (const a of w.animals) {
     if (!a.alive || a.tame || a.leaderId) continue;
     if (kind && a.kind !== kind) continue;
+    if (!inBounds(w, Math.floor(a.pos.x), Math.floor(a.pos.y))) continue; // beyond the edge, out of reach
     const d = distance(a.pos, from);
     if (d < bestD) {
       best = a;

@@ -1,8 +1,82 @@
 [
-  { "name": "Wren", "traits": ["curious", "talkative"], "quirk": "names every tool she owns", "skill": "farmer", "ageYears": 27 },
-  { "name": "Tobias", "traits": ["steady", "gruff"], "quirk": "hums while he works", "skill": "builder", "ageYears": 41 },
-  { "name": "Maren", "traits": ["warm", "practical"], "quirk": "collects smooth stones", "skill": "cook", "ageYears": 34 },
-  { "name": "Oskar", "traits": ["anxious", "kind"], "quirk": "apologizes to trees before cutting them", "skill": "woodcutter", "ageYears": 22 },
-  { "name": "Hollis", "traits": ["dry", "observant"], "quirk": "keeps a tally of every sunrise", "skill": "mason", "ageYears": 58 },
-  { "name": "Pip", "traits": ["cheerful", "restless"], "quirk": "believes the shrine answers in birdsong", "skill": "forager", "ageYears": 19 }
+  {
+    "name": "Wren",
+    "traits": [
+      "curious",
+      "talkative"
+    ],
+    "quirk": "names every tool she owns",
+    "skill": "farmer",
+    "ageYears": 27
+  },
+  {
+    "name": "Tobias",
+    "traits": [
+      "steady",
+      "gruff"
+    ],
+    "quirk": "hums while he works",
+    "skill": "builder",
+    "ageYears": 41
+  },
+  {
+    "name": "Maren",
+    "traits": [
+      "warm",
+      "practical"
+    ],
+    "quirk": "collects smooth stones",
+    "skill": "cook",
+    "ageYears": 34
+  },
+  {
+    "name": "Oskar",
+    "traits": [
+      "anxious",
+      "kind"
+    ],
+    "quirk": "apologizes to trees before cutting them",
+    "skill": "woodcutter",
+    "ageYears": 22
+  },
+  {
+    "name": "Hollis",
+    "traits": [
+      "dry",
+      "observant"
+    ],
+    "quirk": "keeps a tally of every sunrise",
+    "skill": "mason",
+    "ageYears": 58
+  },
+  {
+    "name": "Pip",
+    "traits": [
+      "cheerful",
+      "restless"
+    ],
+    "quirk": "believes the shrine answers in birdsong",
+    "skill": "forager",
+    "ageYears": 19
+  },
+  {
+    "name": "Ansel",
+    "traits": [
+      "patient",
+      "blunt"
+    ],
+    "quirk": "whistles to the deer before he hunts them",
+    "skill": "hunter",
+    "ageYears": 31
+  },
+  {
+    "name": "Liesl",
+    "traits": [
+      "cheerful",
+      "stubborn"
+    ],
+    "quirk": "keeps a tally of every fish on a notched stick",
+    "skill": "fisher",
+    "ageYears": 24
+  }
 ]

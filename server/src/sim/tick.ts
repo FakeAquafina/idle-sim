@@ -11,9 +11,14 @@ import { tickAnimals } from "./animals.ts";
 import { tickConversations } from "./conversation.ts";
 import { dailyPopulation, trackExposure } from "./population.ts";
 import { ageOneDay, moveAlongPath, updateNeeds } from "./villager.ts";
-import { assignHomes, distance, structureCenter, structuresWithFunction } from "./world.ts";
+import { chance, randInt } from "./rng.ts";
+import { assignHomes, distance, inBounds, setTile, structureCenter, structuresWithFunction, tileAt } from "./world.ts";
 
 const FAIL_COOLDOWN_TICKS = 60 * TICKS_PER_SECOND;
+/** How often the land is checked for new growth (eight times a sim day). */
+const REGROW_EVERY = Math.floor(TICKS_PER_DAY / 8);
+/** Fullest a regrown forest tile gets. */
+const FOREST_FULL = 12;
 
 export interface TickOptions {
   /** No arrivals or births beyond this many living villagers. */
@@ -27,11 +32,12 @@ export function tickWorld(w: WorldState, opts: TickOptions = {}): void {
   else if (newDay) emitEvent(w, "day", `Day ${w.clock.dayOfSeason + 1} of ${w.clock.season}, year ${w.clock.year + 1}.`);
 
   growFarms(w);
+  if (w.clock.tick % REGROW_EVERY === 0) regrowForests(w);
   tickAnimals(w, newDay);
   updateShortages(w);
   lapseStaleProposals(w);
   if (newDay) assignHomes(w);
-  if (newDay) dailyPopulation(w, opts.populationMax ?? 12);
+  if (newDay) dailyPopulation(w, opts.populationMax ?? 20);
   tickConversations(w);
 
   for (const v of w.villagers) {
@@ -55,6 +61,32 @@ export function tickWorld(w: WorldState, opts: TickOptions = {}): void {
     }
     moveAlongPath(v);
     if (v.speech && w.clock.tick > v.speech.untilTick) v.speech = undefined;
+  }
+}
+
+/**
+ * Trees grow back. Standing forest thickens slowly, and in spring and summer it
+ * seeds the grass beside it, so a cleared wood returns over a few seasons. The
+ * sample is random, so the cost is tiny whatever the map size.
+ */
+function regrowForests(w: WorldState): void {
+  if (w.clock.season === "winter") return;
+  const spreading = w.clock.season === "spring" || w.clock.season === "summer";
+  const samples = Math.ceil((w.width * w.height) / 12);
+  for (let i = 0; i < samples; i++) {
+    const x = randInt(w, 0, w.width - 1);
+    const y = randInt(w, 0, w.height - 1);
+    const t = tileAt(w, x, y);
+    if (t.kind === "forest") {
+      if (t.amount < FOREST_FULL && chance(w, 0.5)) setTile(w, x, y, { kind: "forest", amount: t.amount + 1 });
+      continue;
+    }
+    if (t.kind !== "grass" || !spreading || !chance(w, 0.12)) continue;
+    // A seed only takes beside established trees, and never on the village's doorstep.
+    const neighbours = [tileAt(w, x - 1, y), tileAt(w, x + 1, y), tileAt(w, x, y - 1), tileAt(w, x, y + 1)];
+    if (!neighbours.some((n, k) => n && inBounds(w, x + [-1, 1, 0, 0][k], y + [0, 0, -1, 1][k]) && n.kind === "forest" && n.amount >= 4)) continue;
+    if (w.structures.some((s) => distance({ x, y }, structureCenter(s)) < 5)) continue;
+    setTile(w, x, y, { kind: "forest", amount: 1 });
   }
 }
 

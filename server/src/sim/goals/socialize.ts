@@ -1,4 +1,6 @@
 import { TICKS_PER_DAY, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
+import { chance, pick } from "../rng.ts";
+import { villagerTile } from "../villager.ts";
 import { adjacentToStructure, distance } from "../world.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
@@ -8,6 +10,13 @@ export function stepSocializeAt(w: WorldState, v: Villager, g: Extract<Goal, { t
   const t = travelTo(w, v, adjacentToStructure(w, s));
   if (t === "unreachable") return "failed";
   if (t !== "arrived") return "running";
+
+  // Every so often shift to another spot around the fire, so a long evening doesn't look frozen.
+  if (w.clock.tick % 150 === 0 && chance(w, 0.5)) {
+    const here = villagerTile(v);
+    const spots = adjacentToStructure(w, s).filter((p) => (p.x !== here.x || p.y !== here.y) && distance(p, here) <= 2.3);
+    if (spots.length) v.path = [pick(w, spots)];
+  }
 
   v.needs.social = Math.min(100, v.needs.social + 100 / (0.15 * TICKS_PER_DAY));
   for (const other of w.villagers) {

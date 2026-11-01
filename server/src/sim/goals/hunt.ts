@@ -1,7 +1,7 @@
 import { HUNT_YIELD, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
 import { remember, villagerTile } from "../villager.ts";
-import { adjacentToStructure, adjacentToTile, distance, structuresWithFunction } from "../world.ts";
+import { adjacentToStructure, adjacentToTile, distance, inBounds, structuresWithFunction } from "../world.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
 const GIVE_UP_TICKS = 1800;
@@ -9,7 +9,7 @@ const GIVE_UP_TICKS = 1800;
 export function stepHunt(w: WorldState, v: Villager, g: Extract<Goal, { type: "hunt" }>): StepResult {
   if (g.phase === "chasing") {
     const prey = w.animals.find((a) => a.id === g.animalId && a.alive && !a.tame);
-    if (!prey) return "failed";
+    if (!prey || !inBounds(w, Math.floor(prey.pos.x), Math.floor(prey.pos.y))) return "failed"; // got away over the edge
     if (w.clock.tick - v.goalStartedTick > GIVE_UP_TICKS) return "failed";
     if (distance(v.pos, prey.pos) <= 1.4) {
       prey.alive = false;

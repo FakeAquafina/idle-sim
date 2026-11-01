@@ -1,4 +1,4 @@
-// Big moments: the few things a day worth a stronger model. Opus writes the
+// Big moments: the few things a day worth a stronger model. Sonnet writes the
 // daily chronicle page, obituaries, welcomes for newcomers and newborns, and
 // names for important buildings. Each is one call; a dozen or so a day at most.
 

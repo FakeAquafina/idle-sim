@@ -106,7 +106,7 @@ export function runAdminCommand(cmd: AdminCommand, ctx: AdminContext): { ok: boo
       return { ok: true, message: ctx.settings.bigMomentsEnabled ? "Chronicle on" : "Chronicle off" };
     case "setPopulationMax": {
       const v = Math.floor(Number(cmd.value));
-      if (!Number.isFinite(v) || v < 2 || v > 30) return { ok: false, message: "Population cap must be 2-30" };
+      if (!Number.isFinite(v) || v < 2 || v > 40) return { ok: false, message: "Population cap must be 2-40" };
       ctx.settings.populationMax = v;
       ctx.saveSettings();
       return { ok: true, message: `Population cap ${v}` };

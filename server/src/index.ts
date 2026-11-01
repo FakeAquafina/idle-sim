@@ -44,7 +44,7 @@ const TRUST_PROXY = process.env.TRUST_PROXY ?? "loopback";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 console.log(`[server] config from ${ENV_FILE}`);
 if (!ADMIN_TOKEN) console.warn("[server] ADMIN_TOKEN is not set: admin commands are disabled.");
-// Admin is only reachable from the box itself unless ADMIN_REMOTE=1 (dev convenience).
+// Admin is reachable from private addresses (LAN, Tailscale); ADMIN_REMOTE=1 opens it to any address (dev only).
 const ALLOW_REMOTE_ADMIN = process.env.ADMIN_REMOTE === "1";
 
 const personas = JSON.parse(readFileSync(path.join(DATA_DIR, "villagers.json"), "utf8")) as Persona[];
@@ -101,7 +101,7 @@ const hub = new Hub({
   serverInfo: () => ({ notifyConfigured: notifier.enabled, defaultFeeds: envFeeds?.length ? envFeeds : DEFAULT_FEEDS }),
   allowRemoteAdmin: ALLOW_REMOTE_ADMIN,
 });
-console.log(ALLOW_REMOTE_ADMIN ? "[server] admin: allowed from any address (ADMIN_REMOTE=1)" : "[server] admin: only from this machine (SSH tunnel or scripts/admin.ts)");
+console.log(ALLOW_REMOTE_ADMIN ? "[server] admin: allowed from any address (ADMIN_REMOTE=1)" : "[server] admin: from the home network and Tailscale (private addresses only)");
 
 const NOTIFY_KINDS = new Set(["petition", "arrival", "season", "built", "death", "birth", "partners", "naming"]);
 onEvent((e) => {

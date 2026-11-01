@@ -1,7 +1,7 @@
 // The only file that talks to the Anthropic API.
 //
 // Two models: Haiku for the many small, cheap decisions (plans, chats, memory
-// notes, personas, gossip) and Opus for the few "big moments" a day (chronicle,
+// notes, personas, gossip) and Sonnet for the few "big moments" a day (chronicle,
 // obituaries, welcomes, names). Everything comes back as validated JSON.
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -10,7 +10,7 @@ import { PlanOutputSchema, type PlanOutput } from "@idle-sim/shared";
 import type { z } from "zod/v4";
 
 export const PLAN_MODEL = "claude-haiku-5-5";
-export const STORY_MODEL = "claude-opus-5-5";
+export const STORY_MODEL = "claude-sonnet-5-5";
 
 /** Null when no API key is configured; the village then runs on autopilot. */
 export function makeClient(): Anthropic | null {
@@ -49,7 +49,7 @@ export async function requestStructured<S extends z.ZodType>(
       system: [{ type: "text", text: systemPrompt, ...(opts.cacheSystem !== false ? { cache_control: { type: "ephemeral" as const } } : {}) }],
       messages: [{ role: "user", content: userPrompt }],
       output_config: { effort: opts.effort ?? "low", format: zodOutputFormat(schema) },
-      // Opus can decline a request outright; let the API re-run it on a fallback model when that happens.
+      // The story model can decline a request outright; let the API re-run it on a fallback model when that happens.
       ...(story ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     });
     const usage = res.usage as unknown as Anthropic.Usage;

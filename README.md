@@ -22,8 +22,9 @@ npm run dev                   # server on :3000, viewer on http://localhost:5173
 
 Open `http://localhost:5173/?token=YOUR_ADMIN_TOKEN` once to unlock the admin bar
 (pause, speed, reset, gifts, whispers, settings). The token is remembered in
-that browser. Admin only works from the server's own machine (see "Exposing it
-to the internet" below); in development the Vite proxy counts as local.
+that browser. Admin only works from private addresses: the home LAN, Tailscale
+and the box itself (see "Admin access" below); in development the Vite proxy
+counts as local.
 
 ## Watching
 
@@ -119,10 +120,10 @@ minute).
   ScienceDaily by default; see `NEWS_FEEDS`) are filtered through a blocklist and
   retold by Claude as a traveller's garbled gossip, which villagers then talk
   about. Switch off, or point at your own feeds, in **Settings**.
-- **The chronicle.** `claude-opus-5-5` writes a page at the end of each village
+- **The chronicle.** `claude-sonnet-5-5` writes a page at the end of each village
   day (when enough happened), plus obituaries, welcomes for newcomers and
   newborns, and names for the dock, mine, workshop, well, shrine and storehouse.
-  Open it with the 📜 button. Opus calls are gated by the same hourly budget and
+  Open it with the 📜 button. Sonnet calls are gated by the same hourly budget and
   opt into the API's server-side refusal fallback. Switch off in **Settings**.
 
 ## Admin settings
@@ -225,21 +226,27 @@ between tailnet devices is already encrypted). Friends need to be on your
 tailnet: invite them from the Tailscale admin console and make sure they are
 allowed the subnet route.
 
-### Exposing it to the internet
+### Admin access
 
-The viewer is safe to put on the open internet, because the public side is
-read-only by construction:
+The village is reached over Tailscale rather than a public port, so admin is
+allowed from any private address: the home LAN (10/8, 172.16/12, 192.168/16),
+Tailscale (100.64/10 and its fd7a: IPv6 range) and loopback. Open
+`http://<box>:3000/?token=YOUR_ADMIN_TOKEN` once from your phone or laptop on
+the tailnet and the admin bar appears and stays unlocked in that browser.
 
-- **Admin commands are only honoured from the box itself.** The WebSocket hub
-  checks the connection's address; from anywhere else the admin token is
+Even if the box were ever exposed, the public side stays read-only:
+
+- **Admin commands are never honoured from a public address.** The WebSocket
+  hub checks the connection's address; from the internet the admin token is
   ignored, even if it leaks. The viewer also never sends or stores a token
-  unless it was opened on `localhost`. (Set `ADMIN_REMOTE=1` in the env file
-  to turn this off; don't on a public box.)
+  unless the page was opened on a private or Tailscale host. (Set
+  `ADMIN_REMOTE=1` in the env file to turn the address check off; don't on a
+  public box.)
 - Viewers can't change anything; they receive world state and events only.
   The API key, admin token and notification URLs never leave the server.
 - Connections are capped at 25 total and 5 per address, and messages at 64 KB.
 
-To administer the village, use the box's console (Proxmox or SSH):
+Admin also works from the box's console (Proxmox or SSH):
 
 ```bash
 cd ~/idle-sim/server && npx tsx scripts/admin.ts '{"cmd":"grant","petitionId":"p3"}'
@@ -253,9 +260,10 @@ ssh -L 3000:localhost:3000 murph@<box>      # then open http://localhost:3000/?t
 
 Petition ids are in the event feed and `/api/state`.
 
-### Port forwarding with Caddy
+### Port forwarding with Caddy (optional)
 
-Caddy gives you automatic HTTPS and passes WebSockets through untouched. You
+Not needed when you reach the box over Tailscale, which is the current setup;
+kept for anyone who wants a public address. Caddy gives you automatic HTTPS and passes WebSockets through untouched. You
 need a DNS name pointing at your home's public IP (your own domain, or a free
 dynamic-DNS name such as DuckDNS), and router ports 80 and 443 forwarded to the
 box. Port 80 is only used to obtain the certificate.

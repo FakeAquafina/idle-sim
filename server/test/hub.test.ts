@@ -46,7 +46,22 @@ describe("hub admin and connection rules", () => {
     s.say({ type: "admin", token: "secret", command: { cmd: "pause" } });
     const result = s.sent.find((m) => m.type === "adminResult");
     expect(result.ok).toBe(false);
-    expect(result.message).toMatch(/server itself/);
+    expect(result.message).toMatch(/home network/);
+  });
+
+  it("the token from the home LAN or Tailscale is admin", () => {
+    for (const ip of ["192.168.0.122", "::ffff:10.0.0.7", "100.101.102.103", "fd7a:115c:a1e0::1"]) {
+      const h = hub();
+      const s = fakeSocket();
+      h.add(s as unknown as WebSocket, "secret", ip);
+      expect(s.sent[0].isAdmin, ip).toBe(true);
+    }
+    for (const ip of ["8.8.8.8", "172.32.0.1", "100.128.0.1", "2001:db8::1"]) {
+      const h = hub();
+      const s = fakeSocket();
+      h.add(s as unknown as WebSocket, "secret", ip);
+      expect(s.sent[0].isAdmin, ip).toBe(false);
+    }
   });
 
   it("the same token from the server's own machine is admin", () => {

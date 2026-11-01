@@ -1,5 +1,5 @@
 import type { Goal, Villager, WorldState } from "@idle-sim/shared";
-import { beginConversation, inConversation } from "../conversation.ts";
+import { beginConversation, canStartConversation, inConversation } from "../conversation.ts";
 import { adjacentToTile, distance } from "../world.ts";
 import { villagerTile } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
@@ -15,9 +15,12 @@ export function stepTalkTo(w: WorldState, v: Villager, g: Extract<Goal, { type: 
     v.path = [];
     g.chatted = true;
     if (inConversation(w, other.id)) return "done"; // they're already talking to someone else
-    beginConversation(w, v, other);
+    if (!beginConversation(w, v, other)) return "done"; // too many talks going on; a nod will do
     return "running";
   }
+
+  // Don't cross the whole village for a chat that can't start.
+  if (!canStartConversation(w)) return "done";
 
   // The other villager moves, so re-path every so often.
   if (w.clock.tick % 15 === 0) v.path = [];

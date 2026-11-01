@@ -33,6 +33,28 @@ export function isLoopback(addr: string | undefined): boolean {
   return a === "127.0.0.1" || a === "::1" || a.startsWith("127.");
 }
 
+/**
+ * Loopback, the home LAN (RFC 1918), Tailscale (100.64.0.0/10 and its fd7a:
+ * IPv6 range), link-local. Public addresses are never trusted for admin, so
+ * even behind a leaky proxy the token alone is not enough.
+ */
+export function isPrivateAddress(addr: string | undefined): boolean {
+  if (!addr) return false;
+  if (isLoopback(addr)) return true;
+  const a = addr.replace(/^::ffff:/, "").toLowerCase();
+  const v4 = a.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [p, q] = [Number(v4[1]), Number(v4[2])];
+    if (p === 10) return true;
+    if (p === 192 && q === 168) return true;
+    if (p === 172 && q >= 16 && q <= 31) return true;
+    if (p === 100 && q >= 64 && q <= 127) return true; // Tailscale CGNAT range
+    if (p === 169 && q === 254) return true;
+    return false;
+  }
+  return a.startsWith("fe80:") || a.startsWith("fc") || a.startsWith("fd");
+}
+
 export interface HubDeps {
   getWorld: () => WorldState;
   getSettings: () => Settings;
@@ -41,7 +63,7 @@ export interface HubDeps {
   adminContext: () => AdminContext;
   serverInfo: () => ServerInfo;
   /**
-   * Admin commands are honoured only from loopback unless this is true, so a
+   * Admin commands are honoured only from private addresses unless this is true, so a
    * server on the open internet never has a usable admin path, even with the
    * token. Reach the admin UI through an SSH tunnel or scripts/admin.ts.
    */
@@ -142,7 +164,7 @@ export class Hub {
     }
     if (msg.type !== "admin") return;
     if (!this.adminAllowed(client.ip)) {
-      this.send(client, { type: "adminResult", ok: false, message: "Admin only works from the server itself (SSH tunnel or scripts/admin.ts)" });
+      this.send(client, { type: "adminResult", ok: false, message: "Admin only works from the home network or Tailscale" });
       return;
     }
     if (!tokenMatches(msg.token, this.deps.adminToken)) {
@@ -156,7 +178,7 @@ export class Hub {
   }
 
   private adminAllowed(ip: string): boolean {
-    return !!this.deps.allowRemoteAdmin || isLoopback(ip);
+    return !!this.deps.allowRemoteAdmin || isPrivateAddress(ip);
   }
 
   private send(client: Client, msg: ServerMessage): void {

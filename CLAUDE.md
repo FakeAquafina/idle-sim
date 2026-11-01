@@ -24,7 +24,7 @@ in `client/src/render/projection.ts`.
   `cd server && npx tsx scripts/admin.ts '{"cmd":"speed","value":20}'`.
 - To preview later seasons locally: `setAi false`, `speed 200` (≈18 s per sim day),
   then restore `speed 1` and `setAi true`. Don't edit a running world's stock by hand.
-- Claude calls: `claude-haiku-5-5` for routine decisions, `claude-opus-5-5` for the
+- Claude calls: `claude-haiku-5-5` for routine decisions, `claude-sonnet-5-5` for the
   chronicle and other big moments, via `client.beta.messages.parse` + Zod. Prompt
   cache is keyed per output schema, so rare calls showing `cached 0` is expected.
 - Commits end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.

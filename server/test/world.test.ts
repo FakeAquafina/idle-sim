@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { canPlace, createWorld, findPlacement, isWalkable, placeStructure, structureAt } from "../src/sim/world.ts";
+import { DEFAULT_SIZE, canPlace, createWorld, findPlacement, isWalkable, placeStructure, structureAt } from "../src/sim/world.ts";
 
 describe("world generation", () => {
   it("creates a grid with starting structures and a clear center", () => {
     const w = createWorld(42);
-    expect(w.tiles.length).toBe(48 * 48);
+    expect(w.tiles.length).toBe(DEFAULT_SIZE * DEFAULT_SIZE);
     expect(w.structures.map((s) => s.kind).sort()).toEqual(["campfire", "shrine", "storehouse"]);
     expect(w.structures.every((s) => s.built)).toBe(true);
   });

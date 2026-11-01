@@ -105,8 +105,8 @@ describe("petitions", () => {
   it("needs half the village to gather before a petition opens", () => {
     const w = world();
     starve(w, "seeds", "wood");
-    const [a, b, c, d] = w.villagers;
-    expect(supportNeeded(w)).toBe(3); // 6 villagers
+    const [a, b, c, d, e] = w.villagers;
+    expect(supportNeeded(w)).toBe(4); // 8 villagers
     const p = proposePetition(w, a, { ask: "seeds", amount: 5, reason: "bare fields" });
     expect(p.status).toBe("proposed");
     expect(p.supporters).toEqual([a.id]);
@@ -115,11 +115,13 @@ describe("petitions", () => {
     expect(supportPetition(w, b, p.id)).toBe(false);
     expect(supportPetition(w, b, p.id)).toBe(false); // same voice twice doesn't count
     expect(p.supporters.length).toBe(2);
-    expect(supportPetition(w, c, p.id)).toBe(true);
+    expect(supportPetition(w, c, p.id)).toBe(false);
+    expect(p.status).toBe("proposed");
+    expect(supportPetition(w, d, p.id)).toBe(true);
     expect(p.status).toBe("open");
-    expect(w.events.some((e) => e.kind === "petition" && e.text.includes(c.name))).toBe(true);
-    expect(c.memory.some((m) => m.includes("gathered"))).toBe(true);
-    expect(supportPetition(w, d, p.id)).toBe(false); // already open
+    expect(w.events.some((e) => e.kind === "petition" && e.text.includes(d.name))).toBe(true);
+    expect(d.memory.some((m) => m.includes("gathered"))).toBe(true);
+    expect(supportPetition(w, e, p.id)).toBe(false); // already open
   });
 
   it("a proposal nobody joins lapses after a day", () => {
@@ -154,10 +156,11 @@ describe("petitions", () => {
   it("granting delivers resources and leaves memories for everyone who gathered", () => {
     const w = world();
     starve(w, "wood", "food");
-    const [a, b, c, d] = w.villagers;
+    const [a, b, c, d, e] = w.villagers;
     const p1 = proposePetition(w, a, { ask: "wood", amount: 20, reason: "the roofs leak" });
     supportPetition(w, b, p1.id);
     supportPetition(w, c, p1.id);
+    supportPetition(w, e, p1.id);
     expect(grantPetition(w, p1.id, { amount: 10, message: "make it last" })).toBeNull();
     expect(w.storehouse.wood).toBe(10);
     expect(a.memory.some((m) => m.includes("less than I asked"))).toBe(true);
@@ -166,6 +169,7 @@ describe("petitions", () => {
     const p2 = proposePetition(w, d, { ask: "food", amount: 10, reason: "we hunger" });
     supportPetition(w, b, p2.id);
     supportPetition(w, c, p2.id);
+    supportPetition(w, e, p2.id);
     expect(denyPetition(w, p2.id)).toBeNull();
     expect(d.memory.some((m) => m.includes("silent"))).toBe(true);
     expect(grantPetition(w, p2.id)).toMatch(/already resolved/);

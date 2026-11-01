@@ -1,7 +1,7 @@
 import { STRUCTURES, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
 import { remember } from "../villager.ts";
-import { adjacentToStructure, adjacentToTile, distance } from "../world.ts";
+import { adjacentToStructure, adjacentToTile, distance, inBounds } from "../world.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
 const GIVE_UP_TICKS = 2400;
@@ -15,6 +15,7 @@ export function stepTame(w: WorldState, v: Villager, g: Extract<Goal, { type: "t
 
   if (g.phase === "approach") {
     if (animal.tame || animal.leaderId) return "failed";
+    if (!inBounds(w, Math.floor(animal.pos.x), Math.floor(animal.pos.y))) return "failed"; // wandered off the land
     if (w.clock.tick - v.goalStartedTick > GIVE_UP_TICKS) return "failed";
     if (distance(v.pos, animal.pos) <= 1.4) {
       animal.leaderId = v.id;

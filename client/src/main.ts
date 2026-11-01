@@ -15,14 +15,25 @@ import { updateAi, updateStatus, updateTopbar, updateViewers } from "./ui/topbar
 import { TvDirector } from "./ui/tv.ts";
 
 // Admin token comes from ?token=... once, then sticks in localStorage. The
-// server only honours it from its own machine, so the viewer bothers with it
-// only when opened on localhost (directly, or through an SSH tunnel).
-const LOCAL = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+// server only honours it from private addresses (the home LAN, Tailscale), so
+// the viewer only ever sends it when opened on such a host: never to a public one.
+const TRUSTED_HOST = isPrivateHost(location.hostname);
 const params = new URLSearchParams(location.search);
 const urlToken = params.get("token");
-if (urlToken !== null) history.replaceState(null, "", location.pathname);
-if (urlToken && LOCAL) localStorage.setItem("adminToken", urlToken);
-const token = LOCAL ? localStorage.getItem("adminToken") : null;
+if (urlToken !== null) history.replaceState(null, "", location.pathname + (params.has("tv") ? "?tv=1" : ""));
+if (urlToken && TRUSTED_HOST) localStorage.setItem("adminToken", urlToken);
+const token = TRUSTED_HOST ? localStorage.getItem("adminToken") : null;
+
+/** localhost, a private or Tailscale IPv4 literal, a Tailscale MagicDNS name, or a bare LAN hostname. */
+function isPrivateHost(h: string): boolean {
+  if (["localhost", "127.0.0.1", "[::1]"].includes(h)) return true;
+  const v4 = h.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
+  if (v4) {
+    const [p, q] = [Number(v4[1]), Number(v4[2])];
+    return p === 10 || (p === 192 && q === 168) || (p === 172 && q >= 16 && q <= 31) || (p === 100 && q >= 64 && q <= 127);
+  }
+  return h.endsWith(".ts.net") || !h.includes(".");
+}
 
 // View angle: ?angle=N once, then remembered; [ and ] nudge it while watching.
 const savedAngle = Number(params.get("angle") ?? localStorage.getItem("viewAngle"));

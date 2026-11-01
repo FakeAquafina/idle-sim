@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS: Settings = {
   budgetUsdPerHour: 0.15, // about $3.60/day if the village runs flat out
   newsEnabled: true,
   bigMomentsEnabled: true,
-  populationMax: 12,
+  populationMax: 20,
   newsFeeds: [],
   notifyEnabled: true,
 };

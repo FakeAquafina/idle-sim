@@ -8,9 +8,13 @@ import { pick } from "./rng.ts";
 import { remember, say } from "./villager.ts";
 
 /** Seconds each line stays on screen before the next is spoken. */
-const LINE_SECONDS = 5;
-/** A pending conversation older than this gets canned lines (e.g. after a restart). */
-const PENDING_GIVE_UP_TICKS = 2 * 60 * TICKS_PER_SECOND;
+const LINE_SECONDS = 4;
+/** A pending conversation older than this gets canned lines (Claude slow, or a restart). */
+const PENDING_GIVE_UP_TICKS = 20 * TICKS_PER_SECOND;
+/** Only this many conversations may run at once, so the screen never fills with bubbles. */
+export const MAX_CONVERSATIONS = 2;
+/** Longest line a villager will say out loud. */
+export const MAX_LINE_CHARS = 90;
 
 export const TONE_AFFINITY: Record<Conversation["tone"], number> = { warm: 6, neutral: 2, tense: -4 };
 
@@ -28,8 +32,13 @@ export function inConversation(w: WorldState, villagerId: string): Conversation 
   return w.conversations.find((c) => c.aId === villagerId || c.bId === villagerId);
 }
 
-/** Two villagers have met face to face: start talking. */
-export function beginConversation(w: WorldState, a: Villager, b: Villager): Conversation {
+export function canStartConversation(w: WorldState): boolean {
+  return w.conversations.length < MAX_CONVERSATIONS;
+}
+
+/** Two villagers have met face to face: start talking. Null when the village is already noisy enough. */
+export function beginConversation(w: WorldState, a: Villager, b: Villager): Conversation | null {
+  if (!canStartConversation(w)) return null;
   const c: Conversation = {
     id: `c${w.nextId++}`,
     aId: a.id,
@@ -87,7 +96,7 @@ export function tickConversations(w: WorldState): void {
     }
     const line = c.lines[c.nextLine++];
     const speaker = line.speakerId === b.id ? b : a;
-    say(w, speaker, line.text.slice(0, 120), LINE_SECONDS + 1);
+    say(w, speaker, line.text.slice(0, MAX_LINE_CHARS), LINE_SECONDS + 1);
     c.nextTick = w.clock.tick + LINE_SECONDS * TICKS_PER_SECOND;
   }
 }

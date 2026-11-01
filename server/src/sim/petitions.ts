@@ -17,7 +17,7 @@ import {
 import { emitEvent } from "./events.ts";
 import { arrive } from "./population.ts";
 import { remember, say, type Persona } from "./villager.ts";
-import { countResourceTiles, distance, hasCoast, structuresWithFunction } from "./world.ts";
+import { countResourceTiles, distance, hasCoast, nearestWildAnimal, structuresWithFunction } from "./world.ts";
 
 const RESOURCE_ASKS = ["wood", "stone", "food", "seeds"] as const;
 type ResourceAsk = (typeof RESOURCE_ASKS)[number];
@@ -59,7 +59,7 @@ export function landCannotProvide(w: WorldState, ask: ResourceAsk): string | nul
     }
     case "food": {
       if (hasCoast(w)) return "the sea is full of fish";
-      if (w.animals.some((a) => a.alive && !a.tame)) return "there is game to hunt";
+      if (nearestWildAnimal(w, { x: w.width / 2, y: w.height / 2 })) return "there is game to hunt";
       if (structuresWithFunction(w, "farm").some((f) => f.growth !== undefined)) return "crops are still growing";
       return null;
     }

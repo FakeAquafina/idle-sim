@@ -3,7 +3,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AiStatus, Settings, WorldState } from "@idle-sim/shared";
-import { inConversation } from "../sim/conversation.ts";
+import { MAX_LINE_CHARS, inConversation } from "../sim/conversation.ts";
 import { remember, say } from "../sim/villager.ts";
 import { planToGoal } from "./apply.ts";
 import type { Budget } from "./budget.ts";
@@ -120,7 +120,7 @@ export class Scheduler {
     const { goal, reason } = protect ? { goal: null, reason: "too hungry to change plans" } : planToGoal(w, v, plan);
 
     v.lastThought = reason ? `${plan.thought} (couldn't: ${reason})` : plan.thought;
-    if (plan.say) say(w, v, plan.say.slice(0, 120), 8);
+    if (plan.say) say(w, v, plan.say.slice(0, MAX_LINE_CHARS), 6);
     if (plan.memory_note) remember(v, plan.memory_note.slice(0, 100));
     if (goal) {
       v.goal = goal;

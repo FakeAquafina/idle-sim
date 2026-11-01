@@ -22,14 +22,14 @@ describe("coast and fishing", () => {
       const w = createWorld(seed);
       expect(hasCoast(w)).toBe(true);
       expect(w.tiles.some((t) => t.kind === "sand")).toBe(true);
-      expect(shoreTiles(w, { x: 24, y: 24 }, 5).length).toBeGreaterThan(0);
+      expect(shoreTiles(w, { x: w.width / 2, y: w.height / 2 }, 5).length).toBeGreaterThan(0);
     }
   });
 
   it("a dock must touch water and fishing brings food home", () => {
     const w = world();
-    const shore = shoreTiles(w, { x: 24, y: 24 }, 1)[0];
-    expect(findPlacement(w, "dock", { x: 24, y: 24 }, 3)).toBeNull(); // nowhere near water
+    const shore = shoreTiles(w, { x: w.width / 2, y: w.height / 2 }, 1)[0];
+    expect(findPlacement(w, "dock", { x: w.width / 2, y: w.height / 2 }, 3)).toBeNull(); // nowhere near water
     const spot = findPlacement(w, "dock", shore, 8)!;
     expect(spot).not.toBeNull();
     const dock = placeStructure(w, "dock", spot.x, spot.y, { built: true, free: true })!;
@@ -77,7 +77,7 @@ describe("animals", () => {
 
   it("tame goats in a pen give food and may breed", () => {
     const w = world(9);
-    const spot = findPlacement(w, "pen", { x: 24, y: 24 })!;
+    const spot = findPlacement(w, "pen", { x: w.width / 2, y: w.height / 2 })!;
     const pen = placeStructure(w, "pen", spot.x, spot.y, { built: true, free: true })!;
     for (const g of w.animals.filter((a) => a.kind === "goat").slice(0, 2)) {
       g.tame = true;
@@ -94,7 +94,7 @@ describe("animals", () => {
 describe("mines", () => {
   it("a mine must touch rock, strikes a vein, and yields stone and ore until dry", () => {
     const w = world(12);
-    expect(findPlacement(w, "mine", { x: 24, y: 24 }, 4)).toBeNull();
+    expect(findPlacement(w, "mine", { x: w.width / 2, y: w.height / 2 }, 4)).toBeNull();
     let rock: { x: number; y: number } | null = null;
     for (let i = 0; i < w.tiles.length && !rock; i++) if (w.tiles[i].kind === "rock") rock = { x: i % w.width, y: Math.floor(i / w.width) };
     const spot = findPlacement(w, "mine", rock!, 6)!;
