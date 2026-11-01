@@ -11,8 +11,16 @@ export function updateTopbar(state: MirrorState): void {
   $("date").textContent = `Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}`;
   $("weather").textContent = { clear: "☀ clear", rain: "🌧 rain", storm: "⛈ storm", snow: "❄ snow" }[c.weather];
   $("speed").textContent = state.paused ? "⏸ paused" : `${state.speed}x`;
-  const s = state.storehouse;
-  $("stock").textContent = `🪵${s.wood} 🪨${s.stone} 🍞${s.food} 🌱${s.seeds}${s.ore ? ` ⛏${s.ore}` : ""}`;
+  // Everything the village owns between them: every bundle plus the common store.
+  const s = { ...state.storehouse };
+  let coins = 0;
+  for (const v of state.villagers) {
+    if (!v.alive) continue;
+    for (const k of Object.keys(s) as (keyof typeof s)[]) s[k] += (v.stock?.[k] ?? 0) + (v.inventory?.[k] ?? 0);
+    coins += v.coins ?? 0;
+  }
+  $("stock").textContent = `🪵${s.wood} 🪨${s.stone} 🍞${s.food} 🌱${s.seeds}${s.ore ? ` ⛏${s.ore}` : ""}${coins ? ` 🪙${coins}` : ""}`;
+  $("stock").title = "What the village owns between them (every bundle, house and the storehouse)";
 }
 
 export function updateViewers(count: number): void {

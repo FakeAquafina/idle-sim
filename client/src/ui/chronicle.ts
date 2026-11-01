@@ -60,7 +60,7 @@ function render(): void {
 }
 
 function label(e: ChronicleEntry): string {
-  const kind = { day: "", obituary: "in memoriam · ", welcome: "welcome · ", naming: "naming · " }[e.kind];
+  const kind = { day: "", obituary: "in memoriam · ", welcome: "welcome · ", naming: "naming · ", discovery: "a discovery · " }[e.kind];
   return `${kind}day ${e.day + 1}`;
 }
 

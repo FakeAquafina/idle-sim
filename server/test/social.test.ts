@@ -13,6 +13,7 @@ import { tickWorld } from "../src/sim/tick.ts";
 import { tileCenter } from "../src/sim/world.ts";
 import type { Persona } from "../src/sim/villager.ts";
 import { createWorld, findPlacement, placeStructure, structuresWithFunction, villageCenter } from "../src/sim/world.ts";
+import { establish } from "./helpers.ts";
 
 const personas = JSON.parse(readFileSync(new URL("../data/villagers.json", import.meta.url), "utf8")) as Persona[];
 const pool = JSON.parse(readFileSync(new URL("../data/newcomers.json", import.meta.url), "utf8")) as Persona[];
@@ -20,6 +21,7 @@ const pool = JSON.parse(readFileSync(new URL("../data/newcomers.json", import.me
 function world(seed = 44): WorldState {
   const w = createWorld(seed);
   seedVillagers(w, personas);
+  establish(w);
   for (const v of w.villagers) v.needs.hunger = 100;
   return w;
 }

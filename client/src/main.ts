@@ -85,7 +85,7 @@ app.stage.on("pointertap", (e) => {
   const local = scene.root.toLocal(e.global);
   const p = scene.pick(local.x, local.y);
   if (camera.dragDistance > 4) return;
-  if (p?.kind === "villager" || p?.kind === "structure") select(p, mirror.state);
+  if ((p?.kind === "villager" && p.id !== "merchant") || p?.kind === "structure") select(p, mirror.state);
   else select(null, null);
 });
 
@@ -158,12 +158,13 @@ function changeAngle(h: number): void {
 }
 
 // ---- Camera helpers ---------------------------------------------------------------------
-/** Look at the storehouse (the village grows around it), zoomed in enough to see faces. */
+/** Look at the camp (the village grows around it), zoomed in enough to see faces. */
 function centerOnVillage(): void {
   const s = mirror.state;
   if (!s) return;
-  const store = s.structures.find((x) => x.kind === "storehouse");
-  const c = store ? projection.toScreen(store.x + store.w / 2, store.y + store.h / 2) : projection.toScreen(s.width / 2, s.height / 2);
+  const fire = s.structures.find((x) => x.kind === "campfire" && x.built);
+  const at = fire ? { x: fire.x + 0.5, y: fire.y + 0.5 } : s.camp ? { x: s.camp.x + 0.5, y: s.camp.y + 0.5 } : { x: s.width / 2, y: s.height / 2 };
+  const c = projection.toScreen(at.x, at.y);
   camera.centerOn(c.x, c.y, window.innerWidth > 900 ? 1.6 : 1.1);
 }
 
@@ -192,6 +193,10 @@ function jumpTo(target: { pos?: Vec2; villagerId?: string }): void {
 function describePick(p: Pick, s: MirrorState): string | null {
   switch (p.kind) {
     case "villager": {
+      if (p.id === "merchant" && s.merchant) {
+        const wares = Object.entries(s.merchant.goods).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ");
+        return `<b>a travelling merchant</b><br>${s.merchant.phase === "trading" ? "trading at the stall" : s.merchant.phase === "arriving" ? "coming down the north road" : "heading back up the road"}${wares ? `<br><span class="muted">pack: ${wares}</span>` : ""}`;
+      }
       const v = s.villagers.find((x) => x.id === p.id);
       if (!v) return null;
       return `<b>${esc(v.name)}</b> <span class="muted">${v.stage}, ${esc(v.skill)}</span><br>${esc(describeGoal(v))}${v.speech ? `<br><i>“${esc(v.speech.text)}”</i>` : ""}`;
@@ -206,7 +211,13 @@ function describePick(p: Pick, s: MirrorState): string | null {
       if (!st) return null;
       const def = STRUCTURES[st.kind];
       const title = `<b>${esc(st.name ?? def.label)}</b>${st.name ? ` <span class="muted">${def.label.toLowerCase()}</span>` : ""}`;
-      if (!st.built) return `${title}<br>${Math.round(st.progress * 100)}% built`;
+      if (st.hidden) return `${title}<br><i>not yet found by anyone</i>`;
+      if (!st.built) {
+        const need = Object.entries(def.cost).map(([k, n]) => ({ k, left: n - (st.delivered?.[k as keyof typeof st.delivered] ?? 0) })).filter((x) => x.left > 0);
+        return `${title}<br>${need.length ? `needs ${need.map((x) => `${x.left} ${x.k}`).join(", ")}` : `${Math.round(st.progress * 100)}% built`}`;
+      }
+      if (st.kind === "storehouse") return `${title}<br>common store: ${Object.entries(s.storehouse).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "empty"}`;
+      if (st.kind === "market") return `${title}<br>${Object.entries(st.goods ?? {}).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing"} for sale · ${st.till ?? 0} coin in the till`;
       if (st.kind === "house") {
         const who = st.ownerIds.map((id) => s.villagers.find((v) => v.id === id)?.name).filter(Boolean);
         return `${title}<br>${who.length ? `home of ${who.map((n) => esc(n!)).join(" and ")}` : "empty"}`;

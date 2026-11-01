@@ -18,9 +18,14 @@ export function seedVillagers(w: WorldState, personas: Persona[]): void {
         break;
       }
     }
-    w.villagers.push(createVillager(w, p, tile));
+    const v = createVillager(w, p, tile);
+    // Not everyone arrives equally hungry or tired, so meals and sleep don't fall into lockstep.
+    v.needs.hunger = randInt(w, 65, 95);
+    v.needs.energy = randInt(w, 75, 100);
+    v.needs.social = randInt(w, 55, 85);
+    w.villagers.push(v);
   }
   assignHomes(w);
   if (w.animals.length === 0) seedAnimals(w);
-  emitEvent(w, "founded", `${personas.length} settlers arrive and make camp around the fire.`);
+  emitEvent(w, "founded", `${personas.length} settlers arrive with nothing but the clothes on their backs and make camp in the clearing.`, { pos: w.camp });
 }

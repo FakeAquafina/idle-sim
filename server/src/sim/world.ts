@@ -1,6 +1,7 @@
 // World creation, terrain generation, and spatial helpers.
 
 import {
+  MARKET_FLOAT,
   STRUCTURES,
   tileIndex,
   type Animal,
@@ -29,7 +30,8 @@ export function createWorld(seed: number, width = DEFAULT_SIZE, height = DEFAULT
     structures: [],
     villagers: [],
     animals: [],
-    storehouse: { wood: 30, stone: 10, food: 40, seeds: 6, ore: 0 },
+    camp: { x: Math.floor(width / 2), y: Math.floor(height / 2) },
+    storehouse: { wood: 0, stone: 0, food: 0, seeds: 0, ore: 0 },
     shortageSince: {},
     clock: makeClock(),
     events: [],
@@ -43,7 +45,7 @@ export function createWorld(seed: number, width = DEFAULT_SIZE, height = DEFAULT
     chronicle: [],
   };
   generateTerrain(w);
-  placeStartingStructures(w);
+  placeShrine(w);
   w.dirtyTiles = [];
   return w;
 }
@@ -139,21 +141,45 @@ function generateTerrain(w: WorldState) {
   for (let i = 0; i < w.tiles.length; i++) {
     if (w.tiles[i].kind === "rock" && chance(w, 0.2)) w.tiles[i] = { kind: "ore", amount: randInt(w, 6, 12) };
   }
-  // Clear the village center
-  for (let y = cy - 7; y <= cy + 7; y++) {
-    for (let x = cx - 7; x <= cx + 7; x++) {
+  // The settlers arrive with nothing, so the land right around the camp is
+  // generous: a wood and a rocky outcrop within a short walk, then a clearing.
+  if (w.width >= 24 && w.height >= 24) {
+    const angle = nextRandom(w) * Math.PI * 2;
+    const at = (a: number, d: number): Vec2 => ({ x: Math.round(cx + Math.cos(a) * d), y: Math.round(cy + Math.sin(a) * d) });
+    const wood = at(angle, 8);
+    blob(w, wood.x, wood.y, 70, "forest", () => randInt(w, 8, 14));
+    const wood2 = at(angle + 2.4, 9);
+    blob(w, wood2.x, wood2.y, 40, "forest", () => randInt(w, 6, 12));
+    const rock = at(angle + Math.PI * 0.9, 9);
+    blob(w, rock.x, rock.y, 22, "rock", () => randInt(w, 10, 18));
+  }
+  // Clear the camp itself.
+  for (let y = cy - 5; y <= cy + 5; y++) {
+    for (let x = cx - 5; x <= cx + 5; x++) {
       if (!inBounds(w, x, y)) continue;
-      if (Math.hypot(x - cx, y - cy) <= 7) w.tiles[tileIndex(w.width, x, y)] = { kind: "grass", amount: 0 };
+      if (Math.hypot(x - cx, y - cy) <= 4.5) w.tiles[tileIndex(w.width, x, y)] = { kind: "grass", amount: 0 };
     }
   }
 }
 
-function placeStartingStructures(w: WorldState) {
-  const cx = Math.floor(w.width / 2);
-  const cy = Math.floor(w.height / 2);
-  placeStructure(w, "storehouse", cx - 1, cy - 4, { built: true, free: true });
-  placeStructure(w, "campfire", cx, cy + 1, { built: true, free: true });
-  placeStructure(w, "shrine", cx + 4, cy + 1, { built: true, free: true });
+/**
+ * An old shrine already stands somewhere on the land, a fair walk from the camp.
+ * Nobody knows it is there until someone wanders close; see discoverLandmarks.
+ */
+function placeShrine(w: WorldState) {
+  const c = w.camp;
+  const far = Math.min(22, Math.floor(Math.min(w.width, w.height) / 3));
+  const near = Math.max(6, Math.floor(far * 0.65));
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const x = randInt(w, 2, w.width - 3);
+    const y = randInt(w, 2, w.height - 3);
+    const d = Math.hypot(x - c.x, y - c.y);
+    if (d < near || d > far) continue;
+    if (placeStructure(w, "shrine", x, y, { built: true, free: true, hidden: true })) return;
+  }
+  // Cramped test maps: anywhere legal will do.
+  const spot = findPlacement(w, "shrine", c, Math.max(w.width, w.height));
+  if (spot) placeStructure(w, "shrine", spot.x, spot.y, { built: true, free: true, hidden: true });
 }
 
 // ---- Tiles -----------------------------------------------------------------
@@ -292,8 +318,20 @@ export function nearestWildAnimal(w: WorldState, from: Vec2, kind?: Animal["kind
 
 // ---- Structures ------------------------------------------------------------
 
+/** Everything the village owns between them: every villager's stock plus the common store. */
+export function villageStock(w: WorldState): Record<ResourceKind, number> {
+  const out = { ...w.storehouse };
+  for (const v of w.villagers) {
+    if (!v.alive) continue;
+    for (const k of Object.keys(out) as ResourceKind[]) out[k] += (v.stock[k] ?? 0) + (v.inventory[k] ?? 0);
+  }
+  return out;
+}
+
+/** Could the village, pooling what everyone owns, pay for this? Materials still have to be brought to the blueprint. */
 export function canAfford(w: WorldState, cost: Inventory): boolean {
-  return (Object.entries(cost) as [ResourceKind, number][]).every(([k, n]) => (w.storehouse[k] ?? 0) >= n);
+  const have = villageStock(w);
+  return (Object.entries(cost) as [ResourceKind, number][]).every(([k, n]) => (have[k] ?? 0) >= n);
 }
 
 export function canPlace(w: WorldState, kind: string, x: number, y: number): boolean {
@@ -320,14 +358,12 @@ export function placeStructure(
   kind: string,
   x: number,
   y: number,
-  opts: { built?: boolean; free?: boolean } = {},
+  opts: { built?: boolean; free?: boolean; hidden?: boolean } = {},
 ): Structure | null {
   const def = STRUCTURES[kind];
   if (!def || !canPlace(w, kind, x, y)) return null;
-  if (!opts.free) {
-    if (!canAfford(w, def.cost)) return null;
-    for (const [k, n] of Object.entries(def.cost) as [ResourceKind, number][]) w.storehouse[k] -= n;
-  }
+  // A blueprint costs nothing to lay out; the materials are brought to it by whoever helps build.
+  if (!opts.free && !canAfford(w, def.cost)) return null;
   const s: Structure = {
     id: `s${w.nextId++}`,
     kind,
@@ -338,6 +374,8 @@ export function placeStructure(
     progress: opts.built ? 1 : 0,
     built: !!opts.built,
     ownerIds: [],
+    ...(opts.built ? {} : { delivered: {} }),
+    ...(opts.hidden ? { hidden: true } : {}),
   };
   w.structures.push(s);
   if (s.built) onStructureBuilt(w, s);
@@ -353,6 +391,10 @@ export function onStructureBuilt(w: WorldState, s: Structure): void {
       for (let xx = s.x; xx < s.x + s.w; xx++) setTile(w, xx, yy, { kind: "farmland", amount: 0 });
   }
   if (s.kind === "mine") strikeVein(w, s);
+  if (s.kind === "market") {
+    s.goods ??= {};
+    s.till ??= MARKET_FLOAT;
+  }
 }
 
 /** A new mine finds whatever the surrounding rock holds. */
@@ -413,8 +455,9 @@ export function findPlacement(w: WorldState, kind: string, near: Vec2, maxRadius
   return null;
 }
 
+/** Structures serving a purpose. With builtOnly (the default) a hidden, undiscovered one does not count. */
 export function structuresWithFunction(w: WorldState, fn: StructureFunction, builtOnly = true): Structure[] {
-  return w.structures.filter((s) => STRUCTURES[s.kind]?.function === fn && (!builtOnly || s.built));
+  return w.structures.filter((s) => STRUCTURES[s.kind]?.function === fn && (!builtOnly || (s.built && !s.hidden)));
 }
 
 export function structureCenter(s: Structure): Vec2 {
@@ -424,7 +467,7 @@ export function structureCenter(s: Structure): Vec2 {
 export function villageCenter(w: WorldState): Vec2 {
   const fire = structuresWithFunction(w, "social")[0];
   if (fire) return { x: fire.x, y: fire.y };
-  return { x: Math.floor(w.width / 2), y: Math.floor(w.height / 2) };
+  return w.camp ?? { x: Math.floor(w.width / 2), y: Math.floor(w.height / 2) };
 }
 
 /** Give homeless villagers a bed in any house with room. */

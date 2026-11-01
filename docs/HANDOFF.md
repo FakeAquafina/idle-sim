@@ -56,13 +56,25 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
   preference), committed into the repo, tiles and buildings from the pack with code-drawn
   villagers kept until a matching character set turns up. The view angle becomes fixed at
   the pack's 2:1 (TILE_H 16) and the live `?angle` tuning goes. 3D is parked.
-- Fresh worlds (decided, being built): villagers start with the clothes on their backs,
-  no buildings at all; the starting area is rich enough to survive and build. The shrine
-  exists on the map from generation, away from the start, and is *discovered* when
-  someone walks near it; petitions need it found first.
-- Economy (decided, being built): villagers own what they gather, share within a
-  household, and trade surplus with each other for coin at a market stall; travellers
-  sell what the land lacks. Grants from the owner stay free.
+- Fresh worlds (built): villagers start with the clothes on their backs, no buildings at
+  all; a wood and a rocky outcrop lie within a short walk of the camp (`w.camp`). The
+  shrine is placed hidden at generation 10-22 tiles out (`Structure.hidden`), drawn faint
+  in the viewer, and discovered when anyone comes within `DISCOVERY_RADIUS`; petitions
+  need it found first. Old saves load fine: `persist.ts` fills in the new fields.
+- Economy (built; `server/src/sim/stock.ts` is the heart of it): each villager has
+  `stock` (owned, kept at home or at the camp) and `coins`; households share; the
+  worker keeps the yield (gather/fish/hunt/mine/harvest; pen milk goes to the keeper).
+  Blueprints cost nothing to lay out (needs village-wide `canAfford`) and carry
+  `delivered`; helpers fetch materials from home or the common store and bring them
+  over, then work. The storehouse is the common store (`w.storehouse`): `donate` goal
+  for surplus, `eat`/build fall back to it. Market stall (`goods`, `till`) with fixed
+  `PRICES`; `trade` goal sells for coin from the till or buys with coin. A merchant
+  (`merchant.ts`) comes every 3 sim days to buy from the stall and leave seeds/ore/food,
+  or hints to build a stall if there is none. Grants from the owner stay free and go to
+  the storehouse, or are shared out among bundles while there is none.
+- Claude actions grew: forage, donate, trade ("sell wood"/"buy seeds"), explore. The
+  system prompt explains ownership; the villager prompt lists own/household/common stock,
+  the stall, the merchant and blueprint needs.
 - Journeys (decided, not built): a villager may leave the map on a journey; some never
   come back. Those who return bring discoveries: quality-of-life items and inventions
   that let the village evolve.

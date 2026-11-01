@@ -30,6 +30,7 @@ export class Mirror {
     s.villagers = msg.villagers;
     s.structures = msg.structures;
     s.animals = msg.animals;
+    s.merchant = msg.merchant;
     for (const { i, tile } of msg.tiles) s.tiles[i] = tile;
     s.petitions = msg.petitions;
     s.rumors = msg.rumors;

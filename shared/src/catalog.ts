@@ -1,7 +1,7 @@
 // Data-driven content. Adding a new building means adding an entry here;
 // the simulation, the renderer, and (later) Claude's system prompt all read it.
 
-import type { Inventory } from "./world.ts";
+import type { Inventory, ResourceKind } from "./world.ts";
 
 export type StructureFunction =
   | "shelter"
@@ -13,7 +13,8 @@ export type StructureFunction =
   | "fishing"
   | "mining"
   | "livestock"
-  | "crafting";
+  | "crafting"
+  | "market";
 
 /** Extra placement rule: the footprint must touch at least one tile of this kind. */
 export type PlacementNeed = "water" | "rock";
@@ -38,7 +39,7 @@ export interface StructureDef {
 export const STRUCTURES: Record<string, StructureDef> = {
   storehouse: {
     label: "Storehouse",
-    description: "Shared stockpile of wood, stone, food and seeds.",
+    description: "A common store. Villagers donate surplus here and anyone may draw on it when their own runs out.",
     w: 3,
     h: 2,
     cost: { wood: 30, stone: 10 },
@@ -130,6 +131,16 @@ export const STRUCTURES: Record<string, StructureDef> = {
     function: "crafting",
     color: 0x7a6250,
   },
+  market: {
+    label: "Market stall",
+    description: "A stall where villagers sell surplus for coin and buy what they lack. A travelling merchant restocks it and buys what the village has too much of.",
+    w: 2,
+    h: 1,
+    cost: { wood: 10 },
+    buildTicks: 3000,
+    function: "market",
+    color: 0xb8743a,
+  },
   well: {
     label: "Well",
     description: "Fresh water. Improves farm growth nearby.",
@@ -161,3 +172,14 @@ export const WILD_ANIMAL_TARGET = 9;
 export const FARM_YIELD = 6;
 /** Max resource units a villager carries before heading back. */
 export const CARRY_LIMIT = 5;
+
+/** Coin the market stall pays per unit; it sells for one coin more. */
+export const PRICES: Record<ResourceKind, number> = { food: 2, wood: 1, stone: 2, seeds: 3, ore: 4 };
+export const MARKET_MARGIN = 1;
+/** Coin in the till when a stall is first built. */
+export const MARKET_FLOAT = 12;
+/** Foraging: ticks per unit of food, and the chance a unit comes with a seed. */
+export const FORAGE_TICKS = 25;
+export const FORAGE_SEED_CHANCE = 0.15;
+/** How close a villager must come to a hidden landmark to find it. */
+export const DISCOVERY_RADIUS = 3.5;

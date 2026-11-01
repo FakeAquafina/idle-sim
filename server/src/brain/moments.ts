@@ -9,6 +9,7 @@ import { addChronicleEntry } from "../sim/chronicle.ts";
 import { describeTime } from "../sim/clock.ts";
 import { emitEvent } from "../sim/events.ts";
 import { remember } from "../sim/villager.ts";
+import { villageStock } from "../sim/world.ts";
 import type { Budget } from "./budget.ts";
 import { STORY_MODEL, requestStructured } from "./claude.ts";
 
@@ -52,6 +53,10 @@ export class MomentsBrain {
         const kind = e.kind;
         const v = w.villagers.find((x) => x.id === e.villagerIds?.[0]);
         if (v) this.enqueue(() => this.welcome(v.id, kind));
+        break;
+      }
+      case "discovery": {
+        this.enqueue(() => this.discoveryPage(e.text, e.villagerIds?.[0]));
         break;
       }
       case "built": {
@@ -105,9 +110,9 @@ export class MomentsBrain {
   private villageFacts(w: WorldState): string {
     const alive = w.villagers.filter((v) => v.alive);
     const c = w.clock;
-    const s = w.storehouse;
-    const buildings = w.structures.filter((x) => x.built).map((x) => x.name ?? STRUCTURES[x.kind].label.toLowerCase());
-    return `Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}, weather ${c.weather}. ${alive.length} villagers: ${alive.map((v) => `${v.name} (${v.stage}, ${v.skill})`).join(", ")}. Storehouse: ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds, ${s.ore} ore. Buildings: ${buildings.join(", ") || "only the camp"}.`;
+    const s = villageStock(w);
+    const buildings = w.structures.filter((x) => x.built && !x.hidden).map((x) => x.name ?? STRUCTURES[x.kind].label.toLowerCase());
+    return `Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}, weather ${c.weather}. ${alive.length} villagers: ${alive.map((v) => `${v.name} (${v.stage}, ${v.skill})`).join(", ")}. Between them the village owns ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds, ${s.ore} ore. Buildings: ${buildings.join(", ") || "only the camp"}.`;
   }
 
   private async dayPage(day: number): Promise<void> {
@@ -174,6 +179,22 @@ ${v.name}, a ${v.skill} aged ${Math.floor(v.ageDays / DAYS_PER_YEAR)}, has arriv
 Write two or three sentences for the chronicle on their arrival (where they might have come from, what the village made of them), and a short title.`;
     const page = await this.ask(prompt, PageSchema, 800);
     addChronicleEntry(this.deps.getWorld(), "welcome", page?.title ?? v.name, page?.text ?? fallback);
+  }
+
+  private async discoveryPage(text: string, finderId?: string): Promise<void> {
+    const w = this.deps.getWorld();
+    const finder = w.villagers.find((x) => x.id === finderId);
+    const fallback = text;
+    if (!this.canWrite()) {
+      addChronicleEntry(w, "discovery", "An old shrine", fallback);
+      return;
+    }
+    const prompt = `## A discovery
+${this.villageFacts(w)}
+${text}${finder ? ` ${finder.name} is ${finder.stage}, a ${finder.skill}; traits: ${finder.traits.join(", ")}; quirk: ${finder.quirk}.` : ""}
+Write two or three sentences for the chronicle on the finding of the shrine: what it looked like, what the finder felt, what the village made of it. Give it a short title.`;
+    const page = await this.ask(prompt, PageSchema, 800);
+    addChronicleEntry(this.deps.getWorld(), "discovery", page?.title ?? "An old shrine", page?.text ?? fallback);
   }
 
   private async nameBuilding(id: string): Promise<void> {

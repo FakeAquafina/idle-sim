@@ -2,14 +2,20 @@
 // Pure game logic: no network, easy to test.
 
 import {
+  CARRY_LIMIT,
+  MARKET_MARGIN,
+  PRICES,
   STRUCTURES,
   type Goal,
   type PlanOutput,
+  type ResourceKind,
   type Villager,
   type WorldState,
 } from "@idle-sim/shared";
+import { exploreTarget } from "../sim/autopilot.ts";
 import { emitEvent } from "../sim/events.ts";
 import { canPetition, currentProposal } from "../sim/petitions.ts";
+import { RESOURCES, foodWithinReach, hasStorehouse, householdStock } from "../sim/stock.ts";
 import { canAfford, countResourceTiles, distance, findPlacement, hasCoast, nearestWildAnimal, placeStructure, shoreTiles, structuresWithFunction, villageCenter } from "../sim/world.ts";
 import { villagerTile } from "../sim/villager.ts";
 
@@ -22,18 +28,58 @@ export interface ApplyResult {
 export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyResult {
   const tick = w.clock.tick;
   const fire = structuresWithFunction(w, "social")[0];
-  const store = structuresWithFunction(w, "storage")[0];
+  const market = structuresWithFunction(w, "market")[0];
 
   switch (plan.action) {
     case "wander":
       return { goal: null, reason: "wander handled by autopilot" };
 
+    case "explore": {
+      const far = exploreTarget(w, v);
+      if (!far) return { goal: null, reason: "nowhere new to walk to" };
+      return { goal: { type: "wander", target: far } };
+    }
+
     case "rest":
       return { goal: { type: "rest", structureId: v.homeId ?? fire?.id } };
 
-    case "eat":
-      if (!store || w.storehouse.food <= 0) return { goal: null, reason: "no food in the storehouse" };
-      return { goal: { type: "eat" } };
+    case "eat": {
+      if (foodWithinReach(w, v) > 0) return { goal: { type: "eat" } };
+      if (market && (market.goods?.food ?? 0) > 0 && v.coins >= PRICES.food + MARKET_MARGIN) return { goal: { type: "eat" } };
+      return { goal: null, reason: "no food to be had: forage, fish or hunt" };
+    }
+
+    case "forage": {
+      if (countResourceTiles(w, "forest") === 0) return { goal: null, reason: "no woods to forage in" };
+      return { goal: { type: "gather", resource: "food", phase: "to_resource", collectTimer: 0 } };
+    }
+
+    case "donate": {
+      if (!hasStorehouse(w)) return { goal: null, reason: "there is no storehouse to give to" };
+      const res = resourceNamed(plan.target);
+      if (!res) return { goal: null, reason: "donate needs a resource name" };
+      const have = v.stock[res] ?? 0;
+      if (have <= 0) return { goal: null, reason: `you have no ${res} of your own to give` };
+      return { goal: { type: "donate", resource: res, amount: Math.min(CARRY_LIMIT, have), phase: "fetching" } };
+    }
+
+    case "trade": {
+      if (!market) return { goal: null, reason: "there is no market stall" };
+      const words = (plan.target ?? "").trim().toLowerCase().split(/\s+/);
+      const side = words[0] === "buy" ? "buy" : words[0] === "sell" ? "sell" : null;
+      const res = resourceNamed(words[1]);
+      if (!side || !res) return { goal: null, reason: `trade target must be "sell <resource>" or "buy <resource>"` };
+      if (side === "sell") {
+        const have = v.stock[res] ?? 0;
+        if (have <= 0) return { goal: null, reason: `you have no ${res} to sell` };
+        if ((market.till ?? 0) < PRICES[res]) return { goal: null, reason: "the stall's till is empty; wait for the merchant" };
+        return { goal: { type: "trade", side, resource: res, amount: Math.min(CARRY_LIMIT, have), phase: "fetching" } };
+      }
+      const price = PRICES[res] + MARKET_MARGIN;
+      if ((market.goods?.[res] ?? 0) <= 0) return { goal: null, reason: `the stall has no ${res}` };
+      if (v.coins < price) return { goal: null, reason: `${res} costs ${price} coin and you have ${v.coins}` };
+      return { goal: { type: "trade", side, resource: res, amount: Math.min(4, Math.floor(v.coins / price)), phase: "to_market" } };
+    }
 
     case "socialize":
       if (!fire) return { goal: null, reason: "no campfire" };
@@ -90,9 +136,10 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
     case "farm": {
       if (v.stage === "child") return { goal: null, reason: "children don't farm" };
       const farms = structuresWithFunction(w, "farm");
+      const seeds = householdStock(w, v).seeds + (hasStorehouse(w) ? w.storehouse.seeds : 0);
       const pick =
         farms.find((f) => (f.growth ?? 0) >= 1) ??
-        (w.storehouse.seeds > 0 && w.clock.season !== "winter" ? farms.find((f) => f.growth === undefined) : undefined) ??
+        (seeds > 0 && w.clock.season !== "winter" ? farms.find((f) => f.growth === undefined) : undefined) ??
         farms.find((f) => f.growth !== undefined && f.growth < 1);
       if (!pick) return { goal: null, reason: farms.length ? "nothing to do on the farms right now" : "no farms" };
       return { goal: { type: "farm", structureId: pick.id, tendTicks: 0 } };
@@ -108,7 +155,7 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
       const tooMany = tooManyOfKind(w, kind);
       if (tooMany) return { goal: null, reason: tooMany };
       if (w.structures.filter((s) => !s.built).length >= 2) return { goal: null, reason: "two blueprints already waiting" };
-      if (!canAfford(w, STRUCTURES[kind].cost)) return { goal: null, reason: `not enough materials for a ${kind}` };
+      if (!canAfford(w, STRUCTURES[kind].cost)) return { goal: null, reason: `the village does not own enough materials for a ${kind} yet` };
       let near = villageCenter(w);
       let radius = 18;
       if (STRUCTURES[kind].mustTouch === "water") {
@@ -145,12 +192,18 @@ export function planToGoal(w: WorldState, v: Villager, plan: PlanOutput): ApplyR
   }
 }
 
+function resourceNamed(s: string | null | undefined): ResourceKind | null {
+  const k = (s ?? "").trim().toLowerCase().replace(/s$/, "");
+  const match = RESOURCES.find((r) => r === k || r === `${k}s` || r.replace(/s$/, "") === k);
+  return match ?? null;
+}
+
 /** One-of-a-kind buildings, and sensible ceilings for the rest. */
 function tooManyOfKind(w: WorldState, kind: string): string | null {
   const count = w.structures.filter((s) => s.kind === kind).length;
   const alive = w.villagers.filter((v) => v.alive).length;
   const fn = STRUCTURES[kind].function;
-  if ((fn === "storage" || fn === "social" || fn === "petition" || fn === "fishing" || fn === "livestock" || fn === "crafting") && count >= 1) return `the village already has a ${kind}`;
+  if ((fn === "storage" || fn === "social" || fn === "petition" || fn === "fishing" || fn === "livestock" || fn === "crafting" || fn === "market") && count >= 1) return `the village already has a ${kind}`;
   if (fn === "mining" && w.structures.some((s) => s.kind === kind && !s.depleted)) return "the current mine is not worked out yet";
   if (fn === "fishing" && !hasCoast(w)) return "there is no coast here";
   if (fn === "water" && count >= 1 + Math.floor(w.structures.filter((s) => s.kind === "farm").length / 6)) return "one well is enough for now";

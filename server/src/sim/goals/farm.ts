@@ -1,5 +1,6 @@
 import { FARM_YIELD, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
+import { addTo, hasStorehouse, takeFromHousehold } from "../stock.ts";
 import { adjacentToStructure } from "../world.ts";
 import { remember } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
@@ -14,15 +15,22 @@ export function stepFarm(w: WorldState, v: Villager, g: Extract<Goal, { type: "f
   if (t !== "arrived") return "running";
 
   if (s.growth === undefined) {
-    if (w.storehouse.seeds <= 0 || w.clock.season === "winter") return "failed";
-    w.storehouse.seeds -= 1;
+    if (w.clock.season === "winter") return "failed";
+    // A seed from one's own pocket, the household's, or the common store.
+    let seed = takeFromHousehold(w, v, "seeds", 1);
+    if (!seed && hasStorehouse(w) && w.storehouse.seeds > 0) {
+      w.storehouse.seeds -= 1;
+      seed = 1;
+    }
+    if (!seed) return "failed";
     s.growth = 0;
     return "done";
   }
   if (s.growth >= 1) {
+    // The harvest belongs to whoever brings it in.
     const bonus = v.skill === "farmer" ? 2 : 0;
-    w.storehouse.food += FARM_YIELD + bonus;
-    w.storehouse.seeds += 1;
+    addTo(v.stock, "food", FARM_YIELD + bonus);
+    addTo(v.stock, "seeds", 1);
     s.growth = undefined;
     emitEvent(w, "harvest", `${v.name} harvested ${FARM_YIELD + bonus} food.`, { villagerIds: [v.id], pos: { x: s.x, y: s.y } });
     remember(v, "I brought in a harvest.");

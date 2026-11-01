@@ -3,16 +3,21 @@
 import { DAYS_PER_YEAR, STRUCTURES, type Villager, type WorldState } from "@idle-sim/shared";
 import { describeTime } from "../../sim/clock.ts";
 import { askableNow, currentProposal, describeAsk } from "../../sim/petitions.ts";
-import { countResourceTiles, distance, hasCoast, structuresWithFunction } from "../../sim/world.ts";
+import { hasStorehouse, householdOf, householdStock, remainingCost } from "../../sim/stock.ts";
+import { countResourceTiles, distance, hasCoast, structuresWithFunction, villageStock } from "../../sim/world.ts";
 
 function describeGoal(v: Villager): string {
   const g = v.goal;
   if (!g) return "nothing";
   switch (g.type) {
     case "gather":
-      return `gathering ${g.resource}`;
+      return g.resource === "food" ? "foraging" : `gathering ${g.resource}`;
     case "build":
-      return "working on a blueprint";
+      return g.phase === "working" ? "building" : "bringing materials to a blueprint";
+    case "donate":
+      return "taking surplus to the storehouse";
+    case "trade":
+      return g.side === "sell" ? `selling ${g.resource} at the stall` : `buying ${g.resource} at the stall`;
     case "socialize_at":
       return "sitting by the fire";
     case "fish":
@@ -35,6 +40,11 @@ export function relationWord(score: number): string {
   if (score >= 15) return "friend";
   if (score <= -15) return "rival";
   return "acquaintance";
+}
+
+function stockLine(inv: Partial<Record<string, number>>): string {
+  const parts = Object.entries(inv).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`);
+  return parts.length ? parts.join(", ") : "nothing";
 }
 
 /** Partner, parents, children: the people who matter most. */
@@ -71,16 +81,16 @@ function rumorsSection(w: WorldState): string {
 /** The user message for a conversation between two villagers who have just met. */
 export function buildConversePrompt(w: WorldState, a: Villager, b: Villager): string {
   const c = w.clock;
-  const s = w.storehouse;
+  const s = villageStock(w);
   const who = (v: Villager, other: Villager) =>
-    `${v.name}: ${v.stage}, ${v.skill}. Traits: ${v.traits.join(", ")}. Quirk: ${v.quirk}. Hunger ${Math.round(v.needs.hunger)}, energy ${Math.round(v.needs.energy)}, social ${Math.round(v.needs.social)}. Was ${describeGoal(v)}. Thinks of ${other.name} as a ${relationWord(v.relationships[other.id] ?? 0)}. Family: ${familyLine(w, v)}.
+    `${v.name}: ${v.stage}, ${v.skill}. Traits: ${v.traits.join(", ")}. Quirk: ${v.quirk}. Hunger ${Math.round(v.needs.hunger)}, energy ${Math.round(v.needs.energy)}, social ${Math.round(v.needs.social)}. Owns ${stockLine(v.stock)}${v.coins ? `, ${v.coins} coin` : ""}. Was ${describeGoal(v)}. Thinks of ${other.name} as a ${relationWord(v.relationships[other.id] ?? 0)}. Family: ${familyLine(w, v)}.
   Remembers: ${v.memory.slice(-5).join(" / ") || "nothing in particular"}`;
   const events = w.events
     .slice(-5)
     .map((e) => `- ${e.text}`)
     .join("\n");
   return `## A conversation
-${a.name} has come over to talk to ${b.name}. Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}, ${c.weather}. Storehouse: ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds.
+${a.name} has come over to talk to ${b.name}. Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}, ${c.weather}. The village owns between them ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds.
 
 ${who(a, b)}
 ${who(b, a)}
@@ -95,11 +105,32 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
   const c = w.clock;
   const alive = w.villagers.filter((x) => x.alive);
   const years = Math.floor(v.ageDays / DAYS_PER_YEAR);
-  const s = w.storehouse;
+  const s = villageStock(w);
+  const household = householdStock(w, v);
+  const mates = householdOf(w, v).filter((o) => o.id !== v.id).map((o) => o.name);
+  const ownLine = `You own: ${stockLine(v.stock)}; ${v.coins} coin.${mates.length ? ` With your household (${mates.join(", ")}): ${stockLine(household)}.` : ""}`;
+  const storeLine = hasStorehouse(w) ? `Common store: ${stockLine(w.storehouse)}.` : "No storehouse yet: everyone keeps their own bundle at the camp.";
+  const market = structuresWithFunction(w, "market")[0];
+  const marketLine = market ? `Market stall: ${stockLine(market.goods ?? {})} for sale; ${market.till ?? 0} coin in the till.` : "No market stall yet.";
+  const merchantLine = w.merchant
+    ? w.merchant.phase === "trading"
+      ? "A travelling merchant is at the stall right now."
+      : w.merchant.phase === "arriving"
+        ? "A travelling merchant is coming down the north road."
+        : ""
+    : "";
+  const blueprints = w.structures
+    .filter((x) => !x.built)
+    .map((x) => {
+      const need = remainingCost(x, STRUCTURES[x.kind].cost);
+      const list = Object.entries(need).map(([k, n]) => `${n} ${k}`).join(", ");
+      return `${STRUCTURES[x.kind].label.toLowerCase()} blueprint ${list ? `still needs ${list}` : `has all its materials, ${Math.round(x.progress * 100)}% built`}`;
+    })
+    .join("; ");
 
   const buildings = Object.entries(STRUCTURES)
     .map(([kind, def]) => {
-      const built = w.structures.filter((x) => x.kind === kind && x.built).length;
+      const built = w.structures.filter((x) => x.kind === kind && x.built && !x.hidden).length;
       const planned = w.structures.filter((x) => x.kind === kind && !x.built);
       if (!built && !planned.length) return null;
       const extra = planned.length ? ` (+${planned.length} blueprint at ${Math.round(planned[0].progress * 100)}%)` : "";
@@ -162,7 +193,7 @@ export function buildVillagerPrompt(w: WorldState, v: Villager): string {
   return `## You
 ${v.name}, ${v.stage}, ${years} years old. Traits: ${v.traits.join(", ")}. Quirk: ${v.quirk}. Skill: ${v.skill}.
 Needs: hunger ${Math.round(v.needs.hunger)}, energy ${Math.round(v.needs.energy)}, social ${Math.round(v.needs.social)}, warmth ${Math.round(v.needs.warmth)}.
-Carrying: ${Object.entries(v.inventory).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing"}. Home: ${v.homeId ? "yes" : "none"}. Family: ${familyLine(w, v)}. Bonds: ${bondsLine(w, v)}.
+Carrying: ${stockLine(v.inventory)}. ${ownLine} Home: ${v.homeId ? "yes" : "none (sleeping at the camp)"}. Family: ${familyLine(w, v)}. Bonds: ${bondsLine(w, v)}.
 Currently: ${describeGoal(v)}${v.source === "autopilot" ? " (out of habit)" : ""}.
 
 ## Now
@@ -170,8 +201,9 @@ Day ${c.dayOfSeason + 1} of ${c.season}, year ${c.year + 1}, ${describeTime(c)}$
 
 ## The village
 ${alive.length} villagers: ${others}. ${homeless} without a home.
-Storehouse: ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds, ${s.ore} ore.
-Buildings: ${buildings || "only the camp"}. ${farmNote}
+Between everyone the village owns ${s.wood} wood, ${s.stone} stone, ${s.food} food, ${s.seeds} seeds, ${s.ore} ore. ${storeLine} ${marketLine} ${merchantLine}
+Buildings: ${buildings || "only the camp"}. ${blueprints ? `Blueprints: ${blueprints}.` : ""} ${farmNote}
+Shrine: ${structuresWithFunction(w, "petition").length ? "found; petitions are possible." : "none found yet. Somewhere out in the land there may be old things worth finding."}
 Forest: ${countResourceTiles(w, "forest") > 0 ? "yes" : "none left"}. Rock to quarry: ${countResourceTiles(w, "rock") > 0 ? "yes" : "none left"}. ${landNote}
 Near you: ${nearby || "nobody"}.
 Open petitions at the shrine: ${openCount}. ${petitionLine}${shrineNote}

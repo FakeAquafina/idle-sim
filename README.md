@@ -58,8 +58,29 @@ The world is meant to hold everything the village needs, if people work for it:
 - **Deer and goats** roam the wilds and flee from people. They can be hunted for
   food, and goats can be led into a **pen**, where they give food over time and
   breed.
+- The **woods** also give food to anyone who forages, and now and then a seed.
 - A **workshop** costs ore and makes everyone work a quarter faster.
-- Every building is paid for from the storehouse, so houses need harvested wood.
+- Trees grow back: standing forest thickens, and in spring and summer seeds the
+  grass beside it. Saplings are left alone.
+
+## Who owns what
+
+A new village starts with nothing but the clothes on eight backs: no storehouse,
+no fire, no stock. Everyone **owns what they gather**, kept at their house or in
+a bundle at the camp; people sharing a house share theirs, and everyone eats
+their own food first. Buildings are communal projects: laying one out costs
+nothing but makes a blueprint, and whoever helps brings the materials from their
+own stock (or the common store) before the work can start, so a house really is
+built from wood people cut. A **storehouse**, once someone decides to build one,
+is a common store: villagers donate surplus to it and anyone whose own has run
+out may draw on it. A **market stall** buys surplus for coin and sells goods to
+anyone with coin, and a **travelling merchant** comes down the north road every
+few days to restock it (seeds, ore, sometimes food) and buy what has piled up.
+Coin enters the village through him and nowhere else.
+
+The **shrine** is not built. An old one stands somewhere out in the land from
+the start, faint in the viewer so you can see it and the villagers cannot, and
+it is found by whoever first wanders close. Until then nobody can petition.
 
 ## Claude-driven villagers
 
@@ -88,8 +109,8 @@ walked there to stand with them; a gathering nobody joins within a sim day
 breaks up. Open requests appear in the **Shrine petitions** panel, with
 gatherings still collecting voices shown underneath.
 Admins can grant, half-grant, grant with a whispered message, or deny. Gifts
-appear as a crate by the storehouse; villagers remember both answers and
-silence. Admins can also drop unprompted gifts and whisper rumors that villagers
+appear as a crate by the storehouse, or are shared out among the bundles at the
+camp while there is none; villagers remember both answers and silence. Admins can also drop unprompted gifts and whisper rumors that villagers
 will gossip about for a couple of days.
 
 Optional notifications: set `NTFY_URL` (e.g. `https://ntfy.sh/your-topic`) or
@@ -103,8 +124,8 @@ minute).
 - **Conversations.** When a villager goes to talk to someone, Claude writes both
   sides of a short exchange (2-4 lines) that plays out as speech bubbles. The
   tone (warm, neutral, tense) moves their affinity; each may keep a memory of it.
-  Without Claude, or within three minutes of the last chat, canned small talk is
-  used instead.
+  Without Claude, canned small talk is used instead. At most two conversations
+  run at once, so the screen never fills with bubbles.
 - **Bonds and families.** Affinity grows out of talk and time by the fire. Two
   close adults sharing a house become partners and may have a child; children
   grow up on sim-years, elders die of old age, and going hungry or cold for a
@@ -113,7 +134,7 @@ minute).
   from the north road (more eagerly while the village is under 5 people). New
   people are invented by Claude (name, traits, quirk, trade), with a spare
   persona from `server/data/newcomers.json` as the fallback. A **population cap**
-  (default 12) bounds both growth and API spend.
+  (default 20) bounds both growth and API spend.
 - **Memory.** Each villager keeps about twenty notes; when they pile up, Claude
   condenses the oldest dozen into a line or two.
 - **News.** About once an hour, headlines from public RSS feeds (BBC World, NPR,

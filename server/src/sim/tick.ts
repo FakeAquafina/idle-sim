@@ -1,7 +1,7 @@
 // Advances the world by exactly one tick. Pure function of world state + its RNG,
 // so the same seed always produces the same history.
 
-import { TICKS_PER_DAY, TICKS_PER_SECOND, type WorldState } from "@idle-sim/shared";
+import { DISCOVERY_RADIUS, STRUCTURES, TICKS_PER_DAY, TICKS_PER_SECOND, type WorldState } from "@idle-sim/shared";
 import { chooseGoal } from "./autopilot.ts";
 import { updateClock } from "./clock.ts";
 import { emitEvent } from "./events.ts";
@@ -9,8 +9,10 @@ import { stepGoal } from "./goals/index.ts";
 import { lapseStaleProposals, updateShortages } from "./petitions.ts";
 import { tickAnimals } from "./animals.ts";
 import { tickConversations } from "./conversation.ts";
+import { tickMerchant } from "./merchant.ts";
+import { remember, say } from "./villager.ts";
 import { dailyPopulation, trackExposure } from "./population.ts";
-import { ageOneDay, moveAlongPath, updateNeeds } from "./villager.ts";
+import { ageOneDay, moveAlongPath, updateNeeds, villagerTile } from "./villager.ts";
 import { chance, randInt } from "./rng.ts";
 import { assignHomes, distance, inBounds, setTile, structureCenter, structuresWithFunction, tileAt } from "./world.ts";
 
@@ -39,6 +41,8 @@ export function tickWorld(w: WorldState, opts: TickOptions = {}): void {
   if (newDay) assignHomes(w);
   if (newDay) dailyPopulation(w, opts.populationMax ?? 20);
   tickConversations(w);
+  tickMerchant(w);
+  if (w.clock.tick % 20 === 0) discoverLandmarks(w);
 
   for (const v of w.villagers) {
     if (!v.alive) continue;
@@ -87,6 +91,25 @@ function regrowForests(w: WorldState): void {
     if (!neighbours.some((n, k) => n && inBounds(w, x + [-1, 1, 0, 0][k], y + [0, 0, -1, 1][k]) && n.kind === "forest" && n.amount >= 4)) continue;
     if (w.structures.some((s) => distance({ x, y }, structureCenter(s)) < 5)) continue;
     setTile(w, x, y, { kind: "forest", amount: 1 });
+  }
+}
+
+/** Hidden landmarks (the old shrine) are found by whoever first wanders close. */
+function discoverLandmarks(w: WorldState): void {
+  for (const s of w.structures) {
+    if (!s.hidden) continue;
+    const c = structureCenter(s);
+    const finder = w.villagers.find((v) => v.alive && distance(v.pos, c) <= DISCOVERY_RADIUS);
+    if (!finder) continue;
+    s.hidden = false;
+    const label = STRUCTURES[s.kind].label.toLowerCase();
+    say(w, finder, "What is this place?", 8);
+    remember(finder, `I found an old ${label} standing alone in the land. It felt watched.`);
+    for (const o of w.villagers) if (o.alive && o.id !== finder.id) remember(o, `${finder.name} found an old ${label} out beyond the camp.`);
+    emitEvent(w, "discovery", `${finder.name} finds an old ${label} standing alone, moss on its stones. The village has a place to speak to the provider now.`, {
+      villagerIds: [finder.id],
+      pos: villagerTile(finder),
+    });
   }
 }
 

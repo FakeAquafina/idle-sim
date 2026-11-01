@@ -1,6 +1,7 @@
 import { CARRY_LIMIT, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
 import { emitEvent } from "../events.ts";
-import { adjacentToStructure, structuresWithFunction, workBonus } from "../world.ts";
+import { addTo, depositInventory, homeSpot } from "../stock.ts";
+import { adjacentToStructure, workBonus } from "../world.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
 
 const TICKS_PER_UNIT = 25;
@@ -24,7 +25,7 @@ export function stepMine(w: WorldState, v: Villager, g: Extract<Goal, { type: "m
         mine.depleted = true;
         emitEvent(w, "depleted", "The mine's vein has run dry.", { pos: { x: mine.x, y: mine.y } });
       }
-      return carried > 0 ? toStore(g, v) : "failed";
+      return carried > 0 ? toHome(g, v) : "failed";
     }
     g.timer++;
     const needed = TICKS_PER_UNIT / workBonus(w) / (v.skill === "mason" || v.skill === "miner" ? 1.4 : 1);
@@ -34,32 +35,29 @@ export function stepMine(w: WorldState, v: Villager, g: Extract<Goal, { type: "m
       const takeOre = mine.reserve.ore > 0 && (carried % 4 === 3 || mine.reserve.stone <= 0);
       if (takeOre) {
         mine.reserve.ore--;
-        v.inventory.ore = (v.inventory.ore ?? 0) + 1;
+        addTo(v.inventory, "ore", 1);
       } else {
         mine.reserve.stone--;
-        v.inventory.stone = (v.inventory.stone ?? 0) + 1;
+        addTo(v.inventory, "stone", 1);
       }
-      if (carried + 1 >= CARRY_LIMIT) return toStore(g, v);
+      if (carried + 1 >= CARRY_LIMIT) return toHome(g, v);
     }
     return "running";
   }
 
-  const store = structuresWithFunction(w, "storage")[0];
-  if (!store) return "failed";
-  const t = travelTo(w, v, adjacentToStructure(w, store));
-  if (t === "unreachable") return "failed";
-  if (t === "arrived") {
-    w.storehouse.stone += v.inventory.stone ?? 0;
-    w.storehouse.ore += v.inventory.ore ?? 0;
-    v.inventory.stone = 0;
-    v.inventory.ore = 0;
+  // returning
+  const t = travelTo(w, v, homeSpot(w, v));
+  if (t === "unreachable") {
+    depositInventory(v);
     return "done";
   }
-  return "running";
+  if (t !== "arrived") return "running";
+  depositInventory(v);
+  return "done";
 }
 
-function toStore(g: Extract<Goal, { type: "mine" }>, v: Villager): StepResult {
-  g.phase = "to_storehouse";
+function toHome(g: Extract<Goal, { type: "mine" }>, v: Villager): StepResult {
+  g.phase = "returning";
   v.path = [];
   return "running";
 }

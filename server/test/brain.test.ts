@@ -9,12 +9,14 @@ import { seedVillagers } from "../src/sim/seed.ts";
 import { tickWorld } from "../src/sim/tick.ts";
 import type { Persona } from "../src/sim/villager.ts";
 import { createWorld } from "../src/sim/world.ts";
+import { establish } from "./helpers.ts";
 
 const personas = JSON.parse(readFileSync(new URL("../data/villagers.json", import.meta.url), "utf8")) as Persona[];
 
 function world(): WorldState {
   const w = createWorld(21);
   seedVillagers(w, personas);
+  establish(w);
   for (let i = 0; i < 500; i++) tickWorld(w);
   return w;
 }
@@ -23,11 +25,16 @@ function world(): WorldState {
 function starve(w: WorldState, ...asks: ("wood" | "stone" | "food" | "seeds")[]) {
   for (const a of asks) {
     w.storehouse[a] = 0;
+    for (const v of w.villagers) {
+      v.stock[a] = 0;
+      v.inventory[a] = 0;
+    }
     if (a === "wood") for (const t of w.tiles) if (t.kind === "forest") t.amount = 0;
     if (a === "stone") for (const t of w.tiles) if (t.kind === "rock") t.amount = 0;
     if (a === "food") {
       w.coast = undefined;
       w.animals = [];
+      for (const t of w.tiles) if (t.kind === "forest") t.amount = 0; // no berries either
       for (const s of w.structures) if (s.kind === "farm") s.growth = undefined;
     }
     if (a === "seeds") for (const s of w.structures) if (s.kind === "farm") s.growth = undefined;

@@ -71,16 +71,30 @@ export function renderInspector(state: MirrorState): void {
     ${bar("hunger", v.needs.hunger)}${bar("energy", v.needs.energy)}${bar("social", v.needs.social)}${bar("warmth", v.needs.warmth)}
     <div class="row"><b>Doing:</b> ${esc(describeGoal(v))} <span class="muted">(${v.source === "ai" ? "Claude" : "autopilot"})</span></div>
     ${v.lastThought ? `<div class="row"><b>Thinking:</b> <span class="muted">${esc(v.lastThought)}</span></div>` : ""}
-    <div class="row"><b>Carrying:</b> ${Object.entries(v.inventory).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing"}</div>
+    <div class="row"><b>Owns:</b> ${invText(v.stock)}${v.coins ? ` · ${v.coins} coin` : ""}</div>
+    <div class="row"><b>Carrying:</b> ${invText(v.inventory)}</div>
     <div class="row"><b>Home:</b> ${home ? esc(home.name ?? "a house") : "none"}</div>
     <div class="row"><b>Memories:</b><ul>${v.memory.slice(-8).map((m) => `<li>${esc(m)}</li>`).join("") || "<li>none yet</li>"}</ul></div>
   `;
 }
 
+function invText(inv: Partial<Record<string, number>> | undefined): string {
+  return Object.entries(inv ?? {}).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(", ") || "nothing";
+}
+
 function structureHtml(s: Structure, state: MirrorState): string {
   const def = STRUCTURES[s.kind];
   const rows: string[] = [];
-  if (!s.built) rows.push(`<div class="row">${Math.round(s.progress * 100)}% built</div>${bar("progress", s.progress * 100)}`);
+  if (s.hidden) rows.push(`<div class="row muted"><i>Standing out here unnoticed. Nobody in the village has found it yet.</i></div>`);
+  if (!s.built) {
+    const need = Object.entries(def.cost)
+      .map(([k, n]) => ({ k, left: n - (s.delivered?.[k as keyof typeof s.delivered] ?? 0) }))
+      .filter((x) => x.left > 0)
+      .map((x) => `${x.left} ${x.k}`);
+    rows.push(need.length ? `<div class="row"><b>Still needs:</b> ${need.join(", ")}</div>` : `<div class="row">${Math.round(s.progress * 100)}% built</div>${bar("progress", s.progress * 100)}`);
+  }
+  if (s.kind === "storehouse" && s.built) rows.push(`<div class="row"><b>Common store:</b> ${invText(state.storehouse)}</div>`);
+  if (s.kind === "market" && s.built) rows.push(`<div class="row"><b>For sale:</b> ${invText(s.goods)}</div><div class="row"><b>Till:</b> ${s.till ?? 0} coin</div>`);
   const residents = s.ownerIds.map((id) => state.villagers.find((v) => v.id === id)).filter((v): v is VillagerView => !!v && v.alive);
   if (s.kind === "house") rows.push(`<div class="row"><b>Home of:</b> ${residents.map((v) => esc(v.name)).join(" and ") || '<span class="muted">nobody yet</span>'}</div>`);
   if (s.kind === "farm") rows.push(`<div class="row"><b>Crop:</b> ${farmWord(s.growth)}</div>`);
@@ -115,18 +129,20 @@ export function describeGoal(v: VillagerView): string {
   if (!g) return "deciding";
   switch (g.type) {
     case "wander": return "wandering";
-    case "gather": return g.phase === "to_storehouse" ? `hauling ${g.resource} back` : `gathering ${g.resource}`;
-    case "build": return "building";
+    case "gather": return g.phase === "returning" ? (g.deliverTo ? `carrying ${g.resource} to a blueprint` : `carrying ${g.resource} home`) : g.resource === "food" ? "foraging" : `gathering ${g.resource}`;
+    case "build": return g.phase === "fetching" ? "fetching materials" : g.phase === "delivering" ? "bringing materials to a blueprint" : "building";
+    case "donate": return `taking ${g.resource} to the storehouse`;
+    case "trade": return g.side === "sell" ? `off to sell ${g.resource}` : `off to buy ${g.resource}`;
     case "farm": return "working the farm";
     case "rest": return "resting";
     case "eat": return "going to eat";
     case "talk_to": return g.chatted ? "chatting" : "looking for a chat";
     case "socialize_at": return "warming up by the fire";
     case "petition": return "calling a gathering at the shrine";
-    case "fish": return g.phase === "to_storehouse" ? "bringing fish home" : "fishing";
+    case "fish": return g.phase === "returning" ? "bringing fish home" : "fishing";
     case "hunt": return g.phase === "chasing" ? "hunting" : "bringing meat home";
     case "tame": return g.phase === "approach" ? "sneaking up on a goat" : "leading a goat to the pen";
-    case "mine": return g.phase === "to_storehouse" ? "hauling from the mine" : "working the mine";
+    case "mine": return g.phase === "returning" ? "hauling from the mine" : "working the mine";
     case "support": return "going to stand at the shrine";
   }
 }

@@ -5,7 +5,7 @@
 //   labels   names and speech bubbles, never hidden behind a building
 
 import { Container, Graphics, type Renderer, Sprite, Text } from "pixi.js";
-import { STRUCTURES, TICKS_PER_SECOND, type Animal, type Season, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
+import { STRUCTURES, TICKS_PER_SECOND, type Animal, type Merchant, type Season, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
 import { TILE_H, TILE_W, footprint, projection } from "./projection.ts";
 import {
@@ -212,7 +212,7 @@ export class Scene {
       this.drawTiles(state);
     }
     this.updateStructures(state.structures);
-    this.updateVillagers(state.villagers, snap);
+    this.updateVillagers(state.merchant ? [...state.villagers, merchantView(state.merchant)] : state.villagers, snap);
     this.updateAnimals(state.animals ?? [], snap);
     this.drawHover();
   }
@@ -236,7 +236,7 @@ export class Scene {
         this.structureViews.set(s.id, view);
       }
       view.s = s;
-      const key = `${s.built}|${s.progress.toFixed(2)}|${s.growth?.toFixed(2) ?? "-"}|${s.name ?? ""}|${s.depleted ?? false}`;
+      const key = `${s.built}|${s.progress.toFixed(2)}|${s.growth?.toFixed(2) ?? "-"}|${s.name ?? ""}|${s.depleted ?? false}|${s.hidden ?? false}|${deliveredKey(s)}`;
       if (view.key === key) continue;
       view.key = key;
       this.drawStructureView(view, s);
@@ -270,7 +270,9 @@ export class Scene {
     }
     view.label.text = s.name ?? def.label;
     view.label.position.set(p.x, p.y - height - 4);
-    view.label.visible = s.built && s.kind !== "farm" && s.kind !== "pen";
+    view.label.visible = s.built && !s.hidden && s.kind !== "farm" && s.kind !== "pen";
+    // The owner can see an undiscovered landmark, faintly; the villagers cannot.
+    view.root.alpha = s.hidden ? 0.4 : 1;
   }
 
   // ---- Movers (villagers and animals) ------------------------------------------------
@@ -552,6 +554,36 @@ export class Scene {
     const look = this.villagerViews.get(id);
     return look ? { x: look.root.x, y: look.root.y } : null;
   }
+}
+
+/** The merchant is drawn with the villager code: an adult with a pack on his back. */
+function merchantView(m: Merchant): VillagerView {
+  return {
+    id: "merchant",
+    name: "merchant",
+    traits: [],
+    quirk: "",
+    skill: "merchant",
+    ageDays: 0,
+    stage: "adult",
+    alive: true,
+    needs: { hunger: 100, energy: 100, social: 100, warmth: 100 },
+    inventory: { seeds: 1 },
+    stock: {},
+    coins: m.coins,
+    pos: m.pos,
+    goal: null,
+    goalStartedTick: 0,
+    cooldowns: {},
+    memory: [],
+    relationships: {},
+    source: "autopilot",
+  };
+}
+
+/** Part of the redraw key for a blueprint: how much has been brought to it. */
+function deliveredKey(s: Structure): string {
+  return s.delivered ? Object.values(s.delivered).reduce((a, b) => a + (b ?? 0), 0).toString() : "";
 }
 
 /** What standing thing a tile carries, if any. Trees and rocks follow the tile; bushes and reeds are decoration. */

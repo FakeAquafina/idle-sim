@@ -7,7 +7,7 @@ import { DAYS_PER_YEAR, ELDER_FROM_YEARS, STRUCTURES, TICKS_PER_DAY, type Villag
 import { emitEvent } from "./events.ts";
 import { chance, randInt } from "./rng.ts";
 import { ageYears, createVillager, remember, type Persona } from "./villager.ts";
-import { assignHomes, isWalkable, structuresWithFunction, villageCenter } from "./world.ts";
+import { assignHomes, isWalkable, structuresWithFunction, villageCenter, villageStock } from "./world.ts";
 
 /** Affinity at which two single adults sharing a house become partners. */
 export const PARTNER_AFFINITY = 40;
@@ -95,14 +95,14 @@ function wantsBirth(w: WorldState): boolean {
   const people = alive(w).length;
   const since = w.clock.tick - (w.lastBirthTick ?? -Infinity);
   if (since < BIRTH_GAP_DAYS * TICKS_PER_DAY) return false;
-  if (w.storehouse.food < people * 4) return false;
+  if (villageStock(w).food < people * 4) return false;
   return chance(w, 0.25);
 }
 
 function wantsArrival(w: WorldState): boolean {
   const people = alive(w).length;
   if (freeBeds(w) < 1) return false;
-  if (w.storehouse.food < people * 3) return false;
+  if (villageStock(w).food < people * 3) return false;
   const since = w.clock.tick - (w.lastArrivalTick ?? -Infinity);
   if (since < ARRIVAL_GAP_DAYS * TICKS_PER_DAY) return false;
   return chance(w, people < POPULATION_MIN ? 0.6 : 0.25);

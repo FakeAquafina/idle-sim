@@ -4,7 +4,7 @@
 
 import { z } from "zod/v4";
 
-export const PLAN_ACTIONS = ["build", "farm", "gather", "fish", "hunt", "tame", "mine", "talk_to", "rest", "eat", "wander", "socialize", "petition", "support"] as const;
+export const PLAN_ACTIONS = ["build", "farm", "gather", "forage", "fish", "hunt", "tame", "mine", "donate", "trade", "talk_to", "rest", "eat", "wander", "explore", "socialize", "petition", "support"] as const;
 export type PlanAction = (typeof PLAN_ACTIONS)[number];
 
 export const PETITION_ASKS = ["wood", "stone", "food", "seeds", "newcomer", "blessing"] as const;
@@ -23,7 +23,7 @@ export const PlanOutputSchema = z.object({
   target: z
     .string()
     .nullable()
-    .describe("build: a building kind. gather: wood or stone. hunt: deer or goat (or null for whichever is nearest). talk_to: a villager's name. Otherwise null."),
+    .describe("build: a building kind. gather: wood or stone. hunt: deer or goat (or null for whichever is nearest). donate: a resource to give to the common store. trade: 'sell <resource>' or 'buy <resource>'. talk_to: a villager's name. Otherwise null."),
   petition: PetitionRequestSchema.nullable().describe("Only when action is petition (proposing a gathering at the shrine)."),
   memory_note: z.string().nullable().describe("A short note worth remembering, or null."),
 });

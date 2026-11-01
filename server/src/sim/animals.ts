@@ -167,7 +167,10 @@ export function tickAnimals(w: WorldState, newDay: boolean): void {
     for (const pen of structuresWithFunction(w, "livestock")) {
       const herd = w.animals.filter((a) => a.alive && a.penId === pen.id);
       if (herd.length === 0) continue;
-      w.storehouse.food += herd.length;
+      // Milk and cheese go to whoever keeps the pen (the one who finished building it), else to the common store.
+      const keeper = w.villagers.find((v) => v.alive && v.id === pen.keeperId) ?? w.villagers.find((v) => v.alive);
+      if (structuresWithFunction(w, "storage").length && !keeper) w.storehouse.food += herd.length;
+      else if (keeper) keeper.stock.food = (keeper.stock.food ?? 0) + herd.length;
       const cap = STRUCTURES[pen.kind].capacity ?? 4;
       if (herd.length >= 2 && herd.length < cap && chance(w, 0.08)) {
         const kid: Animal = { id: `a${w.nextId++}`, kind: "goat", pos: { x: pen.x + 1.5, y: pen.y + 1 }, idleTicks: 30, tame: true, penId: pen.id, alive: true };

@@ -17,7 +17,7 @@ import {
 import { emitEvent } from "./events.ts";
 import { arrive } from "./population.ts";
 import { remember, say, type Persona } from "./villager.ts";
-import { countResourceTiles, distance, hasCoast, nearestWildAnimal, structuresWithFunction } from "./world.ts";
+import { countResourceTiles, distance, hasCoast, nearestWildAnimal, structuresWithFunction, villageStock } from "./world.ts";
 
 const RESOURCE_ASKS = ["wood", "stone", "food", "seeds"] as const;
 type ResourceAsk = (typeof RESOURCE_ASKS)[number];
@@ -28,7 +28,7 @@ function isResourceAsk(a: PetitionAsk): a is ResourceAsk {
 
 /** Is the village actually short of this right now? Used by autopilot and validation alike. */
 export function villageLacks(w: WorldState, ask: PetitionAsk): boolean {
-  if (isResourceAsk(ask)) return w.storehouse[ask] < PETITION_NEED_THRESHOLD[ask];
+  if (isResourceAsk(ask)) return villageStock(w)[ask] < PETITION_NEED_THRESHOLD[ask];
   if (ask === "newcomer") {
     const beds = structuresWithFunction(w, "shelter").reduce((n, h) => n + (2 - h.ownerIds.length), 0);
     return beds > 0 && w.villagers.filter((v) => v.alive).length < 5;
@@ -38,8 +38,9 @@ export function villageLacks(w: WorldState, ask: PetitionAsk): boolean {
 
 /** Track how long each resource has been short. Call once per tick. */
 export function updateShortages(w: WorldState): void {
+  const have = villageStock(w);
   for (const k of RESOURCE_ASKS) {
-    if (w.storehouse[k] < PETITION_NEED_THRESHOLD[k]) w.shortageSince[k] ??= w.clock.tick;
+    if (have[k] < PETITION_NEED_THRESHOLD[k]) w.shortageSince[k] ??= w.clock.tick;
     else delete w.shortageSince[k];
   }
 }
@@ -60,6 +61,7 @@ export function landCannotProvide(w: WorldState, ask: ResourceAsk): string | nul
     case "food": {
       if (hasCoast(w)) return "the sea is full of fish";
       if (nearestWildAnimal(w, { x: w.width / 2, y: w.height / 2 })) return "there is game to hunt";
+      if (countResourceTiles(w, "forest") > 0) return "the woods still have berries and nuts";
       if (structuresWithFunction(w, "farm").some((f) => f.growth !== undefined)) return "crops are still growing";
       return null;
     }
@@ -110,7 +112,7 @@ export function askableNow(w: WorldState): PetitionAsk[] {
 
 /** Returns a reason the petition is not allowed, or null if it is fine. */
 export function canPetition(w: WorldState, v: Villager, req: PetitionRequest): string | null {
-  if (structuresWithFunction(w, "petition").length === 0) return "there is no shrine";
+  if (structuresWithFunction(w, "petition").length === 0) return "nobody has found a shrine yet";
   const pending = w.petitions.filter((p) => p.status === "open" || p.status === "proposed");
   if (pending.filter((p) => p.villagerId === v.id).length >= MAX_OPEN_PER_VILLAGER) return "you already have a request waiting";
   const village = villageMayAsk(w, req.ask);
@@ -260,9 +262,19 @@ export function deliverGift(w: WorldState, ask: PetitionAsk, amount?: number, ne
   if (isResourceAsk(ask)) {
     const n = Math.max(0, Math.floor(amount ?? 10));
     if (n === 0) return;
-    w.storehouse[ask] += n;
     const store = structuresWithFunction(w, "storage")[0];
-    emitEvent(w, "gift", `A crate holding ${n} ${ask} appeared beside the storehouse overnight.`, store ? { pos: { x: store.x, y: store.y } } : {});
+    if (store) {
+      w.storehouse[ask] += n;
+      emitEvent(w, "gift", `A crate holding ${n} ${ask} appeared beside the storehouse overnight.`, { pos: { x: store.x, y: store.y } });
+      return;
+    }
+    // No common store yet: the gift is shared out among everyone's bundles at the camp.
+    const people = w.villagers.filter((v) => v.alive);
+    people.forEach((v, i) => {
+      const share = Math.floor(n / people.length) + (i < n % people.length ? 1 : 0);
+      v.stock[ask] = (v.stock[ask] ?? 0) + share;
+    });
+    emitEvent(w, "gift", `${n} ${ask} lay by the camp at dawn, shared out among the bundles.`, { pos: w.camp });
     return;
   }
   if (ask === "blessing") {

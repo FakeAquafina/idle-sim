@@ -6,14 +6,15 @@ import { askableNow, canPetition, landCannotProvide, updateShortages } from "../
 import { seedVillagers } from "../src/sim/seed.ts";
 import { tickWorld } from "../src/sim/tick.ts";
 import type { Persona } from "../src/sim/villager.ts";
-import { createWorld, findPlacement, hasCoast, placeStructure, shoreTiles, structuresWithFunction } from "../src/sim/world.ts";
+import { createWorld, findPlacement, hasCoast, placeStructure, shoreTiles, structuresWithFunction, villageStock } from "../src/sim/world.ts";
+import { establish } from "./helpers.ts";
 
 const personas = JSON.parse(readFileSync(new URL("../data/villagers.json", import.meta.url), "utf8")) as Persona[];
 
 function world(seed = 31): WorldState {
   const w = createWorld(seed);
   seedVillagers(w, personas);
-  return w;
+  return establish(w);
 }
 
 describe("coast and fishing", () => {
@@ -37,13 +38,13 @@ describe("coast and fishing", () => {
 
     const v = w.villagers[0];
     for (const x of w.villagers) x.needs.hunger = 100; // nobody eats during the test
-    const before = w.storehouse.food;
+    const before = v.stock.food ?? 0;
     v.goal = { type: "fish", phase: "to_shore", timer: 0 };
     v.goalStartedTick = w.clock.tick;
     v.source = "ai";
     for (let i = 0; i < 6000 && v.goal?.type === "fish"; i++) tickWorld(w);
     expect(v.goal?.type).not.toBe("fish");
-    expect(w.storehouse.food).toBeGreaterThan(before);
+    expect(v.stock.food ?? 0).toBeGreaterThan(before); // the catch is the fisher's own
   });
 });
 
@@ -60,18 +61,18 @@ describe("animals", () => {
     expect(prey.pos.x < start.x || prey.pos.y !== start.y).toBe(true);
   });
 
-  it("a hunt ends with meat in the storehouse", () => {
+  it("a hunt ends with meat in the hunter's bundle", () => {
     const w = world(8);
     const v = w.villagers[0];
     const goat = w.animals.find((a) => a.kind === "goat")!;
     v.pos = { x: goat.pos.x + 1, y: goat.pos.y };
-    const before = w.storehouse.food;
+    const before = villageStock(w).food;
     v.goal = { type: "hunt", animalId: goat.id, phase: "chasing" };
     v.goalStartedTick = w.clock.tick;
     v.source = "ai";
     for (let i = 0; i < 4000 && v.goal?.type === "hunt"; i++) tickWorld(w);
     expect(goat.alive).toBe(false);
-    expect(w.storehouse.food).toBeGreaterThanOrEqual(before);
+    expect(villageStock(w).food).toBeGreaterThanOrEqual(before);
     expect(w.events.some((e) => e.kind === "hunt")).toBe(true);
   });
 
@@ -84,10 +85,11 @@ describe("animals", () => {
       g.penId = pen.id;
       g.pos = { x: pen.x + 0.5, y: pen.y + 0.5 };
     }
-    const before = w.storehouse.food;
+    pen.keeperId = w.villagers[2].id;
+    const before = w.villagers[2].stock.food ?? 0;
     w.clock.tick = Math.floor(TICKS_PER_DAY / 2) - 1;
     for (let i = 0; i < 2; i++) tickAnimals(w, false), w.clock.tick++;
-    expect(w.storehouse.food).toBe(before + 2);
+    expect(w.villagers[2].stock.food).toBe(before + 2); // milk goes to the keeper
   });
 });
 
@@ -104,14 +106,14 @@ describe("mines", () => {
     expect(w.events.some((e) => e.kind === "vein")).toBe(true);
     mine.reserve = { stone: 3, ore: 2 };
     const v = w.villagers[0];
-    const stone = w.storehouse.stone;
-    const ore = w.storehouse.ore;
+    v.needs.hunger = 100;
+    const ore = villageStock(w).ore;
     v.goal = { type: "mine", structureId: mine.id, phase: "to_mine", timer: 0 };
     v.goalStartedTick = w.clock.tick;
     v.source = "ai";
     for (let i = 0; i < 8000 && v.goal?.type === "mine"; i++) tickWorld(w);
-    expect(w.storehouse.ore).toBe(ore + 2); // nothing else consumes ore this early
-    expect(stone).toBeGreaterThan(0);
+    expect(villageStock(w).ore).toBe(ore + 2); // nothing else consumes ore this early
+    expect(v.stock.stone ?? 0).toBeGreaterThan(0);
     expect(mine.reserve!.stone + mine.reserve!.ore).toBe(0);
   });
 });

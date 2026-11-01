@@ -428,7 +428,7 @@ export function drawAnimal(g: Graphics, kind: "deer" | "goat", tame: boolean, st
 /** How tall each kind stands above its footprint, in pixels (0 = flat). Used for sorting and hit tests. */
 export function structureHeight(kind: string, built: boolean): number {
   if (!built) return 0;
-  return { house: 16, storehouse: 12, workshop: 13, mine: 9, shrine: 14, well: 14, campfire: 6, dock: 3, pen: 5, farm: 0 }[kind] ?? 8;
+  return { house: 16, storehouse: 12, workshop: 13, mine: 9, shrine: 14, well: 14, campfire: 6, dock: 3, pen: 5, farm: 0, market: 12 }[kind] ?? 8;
 }
 
 interface Pt {
@@ -584,6 +584,17 @@ export function drawStructure(g: Graphics, s: Structure, def: StructureDef, pal:
       // Two small candles.
       g.rect(m.x - 7, m.y - 6, 1, 2).fill(0xfff1c0).rect(m.x - 7, m.y - 7, 1, 1).fill(0xffb347);
       g.rect(m.x + 6, m.y - 6, 1, 2).fill(0xfff1c0).rect(m.x + 6, m.y - 7, 1, 1).fill(0xffb347);
+      break;
+    }
+    case "market": {
+      // A trestle counter under a striped awning on two poles.
+      isoBox(g, w, h, 4, 0x9c7a4a, 0x7d5b32, 0xb9915c);
+      const m = footprintCenter(w, h);
+      g.rect(m.x - 14, m.y - 14, 1, 10).fill(0x5a3a1e).rect(m.x + 13, m.y - 14, 1, 10).fill(0x5a3a1e);
+      for (let i = 0; i < 8; i++) g.rect(m.x - 16 + i * 4, m.y - 17, 4, 3).fill(i % 2 ? (snow ? 0xe8ecf0 : 0xf2efe6) : 0xc0504d);
+      g.rect(m.x - 16, m.y - 14, 32, 1).fill({ color: 0x000000, alpha: 0.35 });
+      // Goods on the counter.
+      g.rect(m.x - 8, m.y - 7, 4, 3).fill(0xd9a441).rect(m.x - 2, m.y - 8, 3, 4).fill(0x6b8e4e).rect(m.x + 4, m.y - 7, 4, 3).fill(0x8a8e93);
       break;
     }
     case "well": {

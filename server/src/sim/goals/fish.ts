@@ -1,4 +1,5 @@
 import { CARRY_LIMIT, FISH_FOOD, type Goal, type Villager, type WorldState } from "@idle-sim/shared";
+import { addTo, depositInventory, homeSpot } from "../stock.ts";
 import { adjacentToStructure, shoreTiles, structuresWithFunction, workBonus } from "../world.ts";
 import { villagerTile } from "../villager.ts";
 import { travelTo, type StepResult } from "./helpers.ts";
@@ -7,7 +8,6 @@ const TICKS_PER_FISH_BEACH = 70;
 const TICKS_PER_FISH_DOCK = 35;
 
 export function stepFish(w: WorldState, v: Villager, g: Extract<Goal, { type: "fish" }>): StepResult {
-  const carried = v.inventory.food ?? 0;
   const dock = structuresWithFunction(w, "fishing")[0];
 
   if (g.phase === "to_shore") {
@@ -25,23 +25,22 @@ export function stepFish(w: WorldState, v: Villager, g: Extract<Goal, { type: "f
     if (v.skill === "fisher") needed *= 0.7;
     if (g.timer >= needed) {
       g.timer = 0;
-      v.inventory.food = carried + 1;
-      if ((v.inventory.food ?? 0) >= CARRY_LIMIT) {
-        g.phase = "to_storehouse";
+      addTo(v.inventory, "food", FISH_FOOD); // a fish is a couple of meals
+      if ((v.inventory.food ?? 0) >= CARRY_LIMIT * FISH_FOOD) {
+        g.phase = "returning";
         v.path = [];
       }
     }
     return "running";
   }
 
-  const store = structuresWithFunction(w, "storage")[0];
-  if (!store) return "failed";
-  const t = travelTo(w, v, adjacentToStructure(w, store));
-  if (t === "unreachable") return "failed";
-  if (t === "arrived") {
-    w.storehouse.food += (v.inventory.food ?? 0) * FISH_FOOD;
-    v.inventory.food = 0;
+  // returning: the catch goes into the fisher's own stock at home.
+  const t = travelTo(w, v, homeSpot(w, v));
+  if (t === "unreachable") {
+    depositInventory(v);
     return "done";
   }
-  return "running";
+  if (t !== "arrived") return "running";
+  depositInventory(v);
+  return "done";
 }

@@ -37,7 +37,13 @@ export function loadWorld(dir: string): WorldState | null {
     w.chronicle ??= [];
     // A chat that was waiting on Claude when the server stopped gets dropped; the pair just parts ways.
     w.conversations = w.conversations.filter((c) => !c.pending);
-    for (const v of w.villagers) v.cooldowns ??= {};
+    w.camp ??= { x: Math.floor(w.width / 2), y: Math.floor(w.height / 2) };
+    for (const v of w.villagers) {
+      v.cooldowns ??= {};
+      v.stock ??= {};
+      v.coins ??= 0;
+    }
+    for (const s of w.structures) if (!s.built) s.delivered ??= {};
     for (const p of w.petitions) {
       p.supporters ??= [p.villagerId];
       p.needed ??= 1;

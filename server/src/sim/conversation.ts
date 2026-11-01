@@ -125,7 +125,7 @@ export function clampAffinity(n: number): number {
 // Small talk for when Claude is unavailable.
 const OPENERS = [
   "Fine weather for it.",
-  "The storehouse looked a little bare.",
+  "My bundle is getting light.",
   "My back aches from all that hauling.",
   "Did you hear the wind last night?",
   "We could use another pair of hands.",

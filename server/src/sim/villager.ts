@@ -35,6 +35,8 @@ export function createVillager(w: WorldState, p: Persona, tile: Vec2): Villager 
     alive: true,
     needs: { hunger: 80, energy: 90, social: 70, warmth: 100 },
     inventory: {},
+    stock: {},
+    coins: 0,
     pos: tileCenter(tile),
     path: [],
     goal: null,

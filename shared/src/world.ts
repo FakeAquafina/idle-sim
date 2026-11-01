@@ -38,6 +38,19 @@ export interface Animal {
 
 export type Inventory = Partial<Record<ResourceKind, number>>;
 
+/** A travelling merchant: walks in from the north road, trades with the market stall, leaves again. */
+export interface Merchant {
+  pos: Vec2;
+  /** Remaining waypoints as integer tile coords. */
+  path: Vec2[];
+  phase: "arriving" | "trading" | "leaving";
+  /** When the trading phase ends. */
+  untilTick: number;
+  /** Wares still in the pack. */
+  goods: Inventory;
+  coins: number;
+}
+
 export interface Structure {
   id: string;
   /** Key into the structure catalog (see catalog.ts). */
@@ -58,6 +71,15 @@ export interface Structure {
   reserve?: { stone: number; ore: number };
   /** Mines only: true once the vein has run dry. */
   depleted?: boolean;
+  /** Blueprints: materials brought so far toward the cost. */
+  delivered?: Inventory;
+  /** Standing on the map but not yet found by anyone (the old shrine). Unusable until discovered. */
+  hidden?: boolean;
+  /** Who finished building it. A pen's keeper gets its milk. */
+  keeperId?: string;
+  /** Market stall: goods set out for sale, and coin in the till. */
+  goods?: Inventory;
+  till?: number;
 }
 
 export interface Needs {
@@ -81,29 +103,42 @@ export type GoalType =
   | "fish"
   | "hunt"
   | "tame"
-  | "mine";
+  | "mine"
+  | "donate"
+  | "trade";
 
 export type Goal =
   | { type: "wander"; target: Vec2 }
   | {
       type: "gather";
-      resource: "wood" | "stone";
+      /** food = foraging berries and nuts in the forest. */
+      resource: "wood" | "stone" | "food";
       target?: Vec2;
-      phase: "to_resource" | "collecting" | "to_storehouse";
+      phase: "to_resource" | "collecting" | "returning";
       collectTimer: number;
+      /** Carry the haul straight to this blueprint instead of home. */
+      deliverTo?: string;
     }
-  | { type: "build"; structureId: string }
+  | {
+      type: "build";
+      structureId: string;
+      /** fetching = going home (or to the store) for materials; delivering = bringing them; working = construction. */
+      phase?: "fetching" | "delivering" | "working";
+      from?: "home" | "store";
+    }
   | { type: "farm"; structureId: string; tendTicks: number }
   | { type: "rest"; structureId?: string }
-  | { type: "eat" }
+  | { type: "eat"; from?: "home" | "store" | "market" }
+  | { type: "donate"; resource: ResourceKind; amount: number; phase: "fetching" | "delivering" }
+  | { type: "trade"; side: "buy" | "sell"; resource: ResourceKind; amount: number; phase: "fetching" | "to_market" }
   | { type: "talk_to"; villagerId: string; chatted: boolean }
   | { type: "socialize_at"; structureId: string; untilTick: number }
   | { type: "petition"; ask: string; amount?: number; reason: string }
   | { type: "support"; petitionId: string }
-  | { type: "fish"; target?: Vec2; phase: "to_shore" | "fishing" | "to_storehouse"; timer: number }
-  | { type: "hunt"; animalId: string; phase: "chasing" | "to_storehouse" }
+  | { type: "fish"; target?: Vec2; phase: "to_shore" | "fishing" | "returning"; timer: number }
+  | { type: "hunt"; animalId: string; phase: "chasing" | "returning" }
   | { type: "tame"; animalId: string; penId: string; phase: "approach" | "leading" }
-  | { type: "mine"; structureId: string; phase: "to_mine" | "digging" | "to_storehouse"; timer: number };
+  | { type: "mine"; structureId: string; phase: "to_mine" | "digging" | "returning"; timer: number };
 
 export interface Speech {
   text: string;
@@ -120,7 +155,11 @@ export interface Villager {
   stage: LifeStage;
   alive: boolean;
   needs: Needs;
+  /** What they carry right now (hands and back). */
   inventory: Inventory;
+  /** What they own, kept at home or in their bundle at the camp. */
+  stock: Inventory;
+  coins: number;
   /** Fractional tile coordinates (center of a tile is x+0.5, y+0.5). */
   pos: Vec2;
   /** Remaining waypoints as integer tile coords. */
@@ -182,7 +221,7 @@ export interface ChronicleEntry {
   id: number;
   tick: number;
   day: number;
-  kind: "day" | "obituary" | "welcome" | "naming";
+  kind: "day" | "obituary" | "welcome" | "naming" | "discovery";
   title: string;
   text: string;
 }
@@ -205,7 +244,14 @@ export interface WorldState {
   structures: Structure[];
   villagers: Villager[];
   animals: Animal[];
+  /** Where the settlers first made camp. Homeless villagers keep their things here. */
+  camp: Vec2;
+  /** The common store, only usable once a storehouse stands. Each villager's own stock is on the villager. */
   storehouse: Record<ResourceKind, number>;
+  merchant?: Merchant;
+  lastMerchantTick?: number;
+  /** The merchant has once told the camp to build a stall. */
+  merchantHinted?: boolean;
   /** Tick at which each resource first dropped below its petition threshold (absent = not short). */
   shortageSince: Partial<Record<ResourceKind, number>>;
   /** Which map edge is sea, if any. */
