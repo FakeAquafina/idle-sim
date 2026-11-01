@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DAYS_PER_SEASON, TICKS_PER_DAY, type WorldState } from "@idle-sim/shared";
+import { CHILD_ROAM, chooseGoal } from "../src/sim/autopilot.ts";
 import { seedVillagers } from "../src/sim/seed.ts";
 import { tickWorld } from "../src/sim/tick.ts";
 import type { Persona } from "../src/sim/villager.ts";
@@ -61,4 +62,26 @@ describe("simulation", () => {
     run(copy, 1000);
     expect(JSON.stringify({ ...copy, dirtyTiles: [] })).toBe(JSON.stringify({ ...w, dirtyTiles: [] }));
   });
+});
+
+describe("children", () => {
+  it("wander close to home instead of drifting across the map", () => {
+    const w = makeWorld(21);
+    run(w, TICKS_PER_DAY);
+    const house = w.structures.find((s) => s.kind === "house" && s.built);
+    expect(house).toBeDefined();
+    const kid = w.villagers[0];
+    kid.stage = "child";
+    kid.skill = "child";
+    kid.homeId = house!.id;
+    kid.needs = { hunger: 100, energy: 100, warmth: 100, social: 100 };
+    const home = { x: house!.x + house!.w / 2, y: house!.y + house!.h / 2 };
+    for (let i = 0; i < 40; i++) {
+      const g = chooseGoal(w, kid);
+      expect(g.type).toBe("wander");
+      if (g.type !== "wander") continue;
+      expect(Math.abs(g.target.x - home.x)).toBeLessThanOrEqual(CHILD_ROAM + 1);
+      expect(Math.abs(g.target.y - home.y)).toBeLessThanOrEqual(CHILD_ROAM + 1);
+    }
+  }, 60_000);
 });

@@ -9,3 +9,5 @@ server/data/petitions.json
 *.log
 server/data/settings.json
 server/data/*.backup.json
+server/data/budget.json
+server/data/budget.json.tmp

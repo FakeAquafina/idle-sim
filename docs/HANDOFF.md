@@ -1,4 +1,4 @@
-# Handoff — state of the village as of 2026-10-31
+# Handoff — state of the village as of 2026-11-01
 
 This file lets a fresh machine, or a fresh Claude Code session, pick the project
 up without the original chat. The original plan is in `docs/PLAN.md`.
@@ -16,7 +16,9 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
    Opus-written chronicle (daily page, obituaries, welcomes, building names).
 4. Isometric viewer with code-drawn pixel art, seasons (snowy winter), weather
    particles, night lights, tooltips, click-to-inspect, event-feed camera jumps,
-   pinch zoom, phone layout, admin settings panel, live view angle (`?angle=N`).
+   pinch zoom, phone layout, admin settings panel, live view angle (`?angle=N`),
+   TV mode (`?tv=1` or the T key: panels hidden, caption strip, self-driving
+   camera, wake lock; `client/src/ui/tv.ts`).
 5. Deployment: `deploy/install.sh` (Node 22, build, `/etc/idle-sim/env`, systemd),
    `deploy/push.sh` (rsync over SSH, alternative to git pull), `deploy/Caddyfile`.
 
@@ -42,10 +44,15 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
 - Graphics direction (discussed, not started): polish the code-drawn style first
   (double pixel density, integer zoom, water shimmer, swaying trees, hats and tools
   by trade, worn paths), then decide about an asset pack. 3D is parked.
-- TV: the owner has a Samsung smart TV and Rokus. Plan: Samsung's browser first, then a
-  `?tv=1` ambient mode in the viewer (panels hidden, caption strip, bigger text, slow
-  camera drift to events, cursor hidden, wake lock), then optionally a Tizen hosted web
+- TV: the owner has a Samsung smart TV and Rokus. `?tv=1` ambient mode is built (see
+  above); next is trying it in Samsung's browser, then optionally a Tizen hosted web
   app. A Proxmox video streamer for the Rokus was judged too heavy.
+- Children wander within 4 tiles of their house (`CHILD_ROAM` in `autopilot.ts`), so a
+  string of wanders no longer walks a toddler to the map edge.
+- Speech bubbles stack upward when they would overlap (frontmost speaker keeps theirs
+  by their head) and fade in and out; see `layoutBubbles` in `scene.ts`.
+- Claude spend for the rolling hour is mirrored to `server/data/budget.json` so a restart
+  no longer resets the cap.
 
 ## The deployed box
 
@@ -69,12 +76,11 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
 ## Pending and ideas
 
 - Networking steps above (Caddy, DNS, port forward, TRUST_PROXY).
-- TV mode (`?tv=1`), then a Tizen hosted web app.
+- Try TV mode on the Samsung TV's browser (`http://<box>:3000/?tv=1`); check the wake
+  lock holds and the caption size reads from the sofa (`#tv` font-size in `style.css`).
+  Then optionally a Tizen hosted web app. Untested on a real TV as of this handoff.
 - Graphics polish list above.
-- Speech bubbles overlap when several villagers chat at the campfire; stagger or fade.
-- Children get adult goals and wander alone to the map edge days after birth; a rule
-  keeping children near home would read better.
-- Budget tracking is in-memory and resets on server restart.
+- A lifted speech bubble loses its little tail to the speaker; a thin stem would help.
 - Notifications are built but `NTFY_URL`/`DISCORD_WEBHOOK` were never set.
 
 ## Moving to another machine

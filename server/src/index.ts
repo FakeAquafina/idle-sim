@@ -62,7 +62,7 @@ console.log(`[server] world loaded: seed ${world.seed}, tick ${world.clock.tick}
 
 // ---- AI, notifications ---------------------------------------------------------
 const client = makeClient();
-const budget = new Budget();
+const budget = new Budget(path.join(DATA_DIR, "budget.json"));
 const systemPrompt = buildSystemPrompt();
 const brainDeps = { getWorld: () => world, client, budget, getSettings: () => settings, systemPrompt };
 const scheduler = new Scheduler(brainDeps);

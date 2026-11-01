@@ -15,12 +15,15 @@ import {
   nearestWildAnimal,
   placeStructure,
   shoreTiles,
+  structureCenter,
   structuresWithFunction,
   villageCenter,
 } from "./world.ts";
 import { villagerTile } from "./villager.ts";
 
 const MAX_BLUEPRINTS = 2;
+/** How far (in tiles) from home a child's wandering may take them. */
+export const CHILD_ROAM = 4;
 
 export function chooseGoal(w: WorldState, v: Villager): Goal {
   const tick = w.clock.tick;
@@ -210,11 +213,19 @@ function nearestOther(w: WorldState, v: Villager): Villager | undefined {
   return best;
 }
 
+/**
+ * Adults drift from wherever they stand. Children stay close to home: each
+ * wander is picked around their house (or the village centre), so a string of
+ * them never random-walks a toddler to the edge of the map.
+ */
 function wanderGoal(w: WorldState, v: Villager): Goal {
   const here = villagerTile(v);
+  const home = v.stage === "child" ? w.structures.find((s) => s.id === v.homeId) : undefined;
+  const anchor = v.stage === "child" ? (home ? structureCenter(home) : villageCenter(w)) : here;
+  const reach = v.stage === "child" ? CHILD_ROAM : 8;
   for (let i = 0; i < 12; i++) {
-    const x = here.x + randInt(w, -8, 8);
-    const y = here.y + randInt(w, -8, 8);
+    const x = Math.floor(anchor.x) + randInt(w, -reach, reach);
+    const y = Math.floor(anchor.y) + randInt(w, -reach, reach);
     if (isWalkable(w, x, y)) return { type: "wander", target: { x, y } };
   }
   return { type: "wander", target: here };

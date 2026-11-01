@@ -1,5 +1,7 @@
 // Drag (or one-finger swipe) to pan, wheel or pinch to zoom. Tracks the last
 // drag distance so a tap at the end of a pan is not treated as a click.
+// `glideTo` eases the view toward a point over a second or two (TV mode uses it
+// to drift between scenes); any touch of the pointer or wheel cancels the glide.
 
 import type { Application, Container, FederatedPointerEvent } from "pixi.js";
 
@@ -9,6 +11,7 @@ const MAX_SCALE = 5;
 export class Camera {
   private pointers = new Map<number, { x: number; y: number }>();
   private pinchDist = 0;
+  private glide: { px: number; py: number; scale: number } | null = null;
   dragDistance = 0;
 
   constructor(
@@ -19,6 +22,7 @@ export class Camera {
     stage.eventMode = "static";
     stage.hitArea = app.screen;
     stage.on("pointerdown", (e: FederatedPointerEvent) => {
+      this.glide = null;
       this.pointers.set(e.pointerId, { x: e.global.x, y: e.global.y });
       if (this.pointers.size === 1) this.dragDistance = 0;
       if (this.pointers.size === 2) this.pinchDist = this.pinchDistance();
@@ -55,6 +59,7 @@ export class Camera {
       "wheel",
       (e) => {
         e.preventDefault();
+        this.glide = null;
         const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
         this.zoomAt(e.offsetX, e.offsetY, factor);
       },
@@ -86,6 +91,34 @@ export class Camera {
     if (scale !== undefined) t.scale.set(Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale)));
     t.x = this.app.screen.width / 2 - px * t.scale.x;
     t.y = this.app.screen.height / 2 - py * t.scale.y;
+  }
+
+  /** The target-local point currently under the middle of the screen. */
+  center(): { x: number; y: number } {
+    const t = this.target;
+    return { x: (this.app.screen.width / 2 - t.x) / t.scale.x, y: (this.app.screen.height / 2 - t.y) / t.scale.y };
+  }
+
+  /** Ease toward a point and zoom level; call `tick` every frame to advance. Any pan or zoom by hand stops it. */
+  glideTo(px: number, py: number, scale?: number): void {
+    this.glide = { px, py, scale: scale ?? this.scale };
+  }
+
+  get gliding(): boolean {
+    return this.glide !== null;
+  }
+
+  /** Advance the glide. `dtMs` is real milliseconds since the last frame. */
+  tick(dtMs: number): void {
+    const g = this.glide;
+    if (!g) return;
+    // Exponential ease: covers about 63% of the remaining distance every 700 ms,
+    // so the move feels like a camera operator, not a cut.
+    const k = 1 - Math.exp(-dtMs / 700);
+    const c = this.center();
+    const scale = this.scale + (g.scale - this.scale) * k;
+    this.centerOn(c.x + (g.px - c.x) * k, c.y + (g.py - c.y) * k, scale);
+    if (Math.abs(g.px - c.x) < 0.3 && Math.abs(g.py - c.y) < 0.3 && Math.abs(g.scale - scale) < 0.001) this.glide = null;
   }
 
   /** Show the whole box (in the target's local pixels) with a little margin. */

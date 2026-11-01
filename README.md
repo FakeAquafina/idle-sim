@@ -36,6 +36,16 @@ glow; rain, storms (with lightning) and snow fall over the scene. All of the
 art is drawn in code (`client/src/render/sprites.ts`), so there are no image
 files to manage; swap it for real sprites later without touching the sim.
 
+**TV mode.** Open the viewer with `?tv=1` (or press T) for an ambient picture
+suited to a living-room screen: the panels disappear, the pointer hides, a
+caption strip along the bottom reads out what just happened and subtitles
+whoever the camera is with, and the camera drifts on its own, following a
+villager or a building for half a minute at a time and cutting slowly to
+births, arrivals, deaths, finished buildings and the like. Touching the screen
+pauses the drift for twenty seconds so you can look around; Escape or T goes
+back to the normal viewer. The page asks the browser for a screen wake lock so
+the TV does not doze off.
+
 ## The land provides
 
 The world is meant to hold everything the village needs, if people work for it:

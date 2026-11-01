@@ -12,6 +12,7 @@ import { renderInbox, setupInbox } from "./ui/inbox.ts";
 import { describeGoal, esc, farmWord, onSelectionChange, renderInspector, select } from "./ui/inspector.ts";
 import { hideTooltip, showTooltip } from "./ui/tooltip.ts";
 import { updateAi, updateStatus, updateTopbar, updateViewers } from "./ui/topbar.ts";
+import { TvDirector } from "./ui/tv.ts";
 
 // Admin token comes from ?token=... once, then sticks in localStorage. The
 // server only honours it from its own machine, so the viewer bothers with it
@@ -37,6 +38,9 @@ const scene = new Scene(app.renderer);
 const atmosphere = new Atmosphere();
 app.stage.addChild(scene.root, atmosphere.gfx);
 const camera = new Camera(app, scene.root);
+// TV mode: ?tv=1 (or ?tv) hides the panels and lets the camera roam on its own.
+const tv = new TvDirector({ camera, scene, state: () => mirror.state });
+tv.setEnabled(params.has("tv") && params.get("tv") !== "0");
 setupChronicle();
 setupFeed(jumpTo);
 onSelectionChange((sel) => scene.setSelection(sel));
@@ -45,6 +49,8 @@ document.getElementById("homeBtn")!.onclick = () => centerOnVillage();
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   if (e.key === "[" || e.key === "]") changeAngle(TILE_H + (e.key === "]" ? 2 : -2));
+  if (e.key === "t" || e.key === "T") tv.toggle();
+  if (e.key === "Escape" && tv.enabled) tv.setEnabled(false);
 });
 
 // ---- Pointer: hover shows a tooltip, a tap selects ------------------------------------
@@ -106,7 +112,10 @@ const conn = connect(token, {
     updateAi(msg.ai);
     renderInbox(s.petitions);
   },
-  onEvent: addEvent,
+  onEvent(e) {
+    addEvent(e);
+    tv.onEvent(e);
+  },
   onChronicle: addChronicleEntry,
   onViewers: updateViewers,
   onAdminResult: showAdminMessage,
@@ -115,6 +124,8 @@ const conn = connect(token, {
 
 app.ticker.add((ticker) => {
   const now = performance.now();
+  tv.update(now, mirror.state);
+  camera.tick(ticker.deltaMS);
   scene.animate(ticker.deltaTime, now);
   atmosphere.update(now, mirror.state, app.screen.width, app.screen.height, scene.lights(), (x, y) => scene.root.toGlobal({ x, y }), camera.scale);
 });

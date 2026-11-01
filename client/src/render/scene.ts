@@ -5,7 +5,7 @@
 //   labels   names and speech bubbles, never hidden behind a building
 
 import { Container, Graphics, type Renderer, Sprite, Text } from "pixi.js";
-import { STRUCTURES, type Animal, type Season, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
+import { STRUCTURES, TICKS_PER_SECOND, type Animal, type Season, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
 import { TILE_H, TILE_W, footprint, projection } from "./projection.ts";
 import {
@@ -75,8 +75,17 @@ interface VillagerLook extends Mover {
   bubble: Container;
   bubbleBg: Graphics;
   bubbleText: Text;
+  /** Bubble box size and when the line ends, for stacking and fading. */
+  bubbleW: number;
+  bubbleH: number;
+  speechUntil: number;
+  bubbleShownAt: number;
   height: number;
 }
+
+/** Speech bubbles fade out over this long before the line ends, and fade in this fast. */
+const BUBBLE_FADE_OUT_TICKS = 1.5 * TICKS_PER_SECOND;
+const BUBBLE_FADE_IN_MS = 180;
 
 const LABEL_STYLE = { fontSize: 9, fill: 0xffffff, fontFamily: "ui-monospace, Menlo, monospace", stroke: { color: 0x101418, width: 2 } };
 const WALK_FRAME_MS = 160;
@@ -316,6 +325,10 @@ export class Scene {
           look.bubbleBg.roundRect(-bw / 2, -bh, bw, bh, 3).fill({ color: 0xfaf6ee, alpha: 0.95 });
           look.bubbleBg.poly([-3, 0, 3, 0, 0, 3]).fill({ color: 0xfaf6ee, alpha: 0.95 });
           look.bubbleText.position.set(-bw / 2 + 4, -bh + 2);
+          look.bubbleW = bw;
+          look.bubbleH = bh;
+          if (!look.bubble.visible || look.speechUntil !== v.speech.untilTick) look.bubbleShownAt = performance.now();
+          look.speechUntil = v.speech.untilTick;
           look.bubble.visible = true;
         } else {
           look.bubble.visible = false;
@@ -346,7 +359,7 @@ export class Scene {
     bubble.addChild(bubbleBg, bubbleText);
     bubble.visible = false;
     this.labels.addChild(name, bubble);
-    return { ...mover, name, bubble, bubbleBg, bubbleText, height: villagerHeight(v.stage) };
+    return { ...mover, name, bubble, bubbleBg, bubbleText, bubbleW: 0, bubbleH: 0, speechUntil: 0, bubbleShownAt: 0, height: villagerHeight(v.stage) };
   }
 
   // ---- Animals --------------------------------------------------------------------
@@ -403,6 +416,7 @@ export class Scene {
       look.name.position.set(Math.round(look.root.x), Math.round(look.root.y - look.height - 2));
       if (look.bubble.visible) look.bubble.position.set(Math.round(look.root.x), Math.round(look.root.y - look.height - 14));
     }
+    this.layoutBubbles(nowMs);
     for (const look of this.animalViews.values()) stepMover(look);
 
     const t = nowMs / 1000;
@@ -419,6 +433,34 @@ export class Scene {
         const lived = view.s.kind !== "house" || view.s.ownerIds.length > 0;
         if (cp) drawSmoke(view.smoke, cp.x, cp.y, t + hash(view.s.x, view.s.y) % 7, lived ? smokeStrength : 0);
       }
+    }
+  }
+
+  /**
+   * Keep speech bubbles readable when several people talk at once (the campfire):
+   * the frontmost speaker keeps their bubble by their head and anyone whose bubble
+   * would cover it is lifted above. Bubbles also fade in, and out as the line ends.
+   */
+  private layoutBubbles(nowMs: number): void {
+    const tick = this.state?.clock.tick ?? 0;
+    const placed: { l: number; r: number; t: number; b: number }[] = [];
+    const visible = [...this.villagerViews.values()].filter((v) => v.bubble.visible).sort((a, b) => b.root.y - a.root.y);
+    for (const look of visible) {
+      const fadeIn = Math.min(1, (nowMs - look.bubbleShownAt) / BUBBLE_FADE_IN_MS);
+      const fadeOut = Math.max(0, Math.min(1, (look.speechUntil - tick) / BUBBLE_FADE_OUT_TICKS));
+      look.bubble.alpha = Math.min(fadeIn, fadeOut);
+      let y = look.bubble.y;
+      const box = { l: look.bubble.x - look.bubbleW / 2, r: look.bubble.x + look.bubbleW / 2, t: y - look.bubbleH, b: y };
+      for (let pass = 0; pass < placed.length; pass++) {
+        const hit = placed.find((p) => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t);
+        if (!hit) break;
+        const lift = box.b - hit.t + 2;
+        y -= lift;
+        box.t -= lift;
+        box.b -= lift;
+      }
+      look.bubble.y = y;
+      placed.push(box);
     }
   }
 

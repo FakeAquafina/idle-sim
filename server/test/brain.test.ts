@@ -206,3 +206,23 @@ describe("budget", () => {
     expect(usd).toBeLessThan(0.001);
   });
 });
+
+describe("budget persistence", () => {
+  it("restores the last hour's spend from disk and drops older entries", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const path = await import("node:path");
+    const { Budget } = await import("../src/brain/budget.ts");
+    const dir = mkdtempSync(path.join(tmpdir(), "idle-sim-budget-"));
+    const file = path.join(dir, "budget.json");
+    const now = Date.now();
+    writeFileSync(file, JSON.stringify([{ at: now - 2 * 60 * 60 * 1000, usd: 5 }, { at: now - 60_000, usd: 0.25 }]));
+    const a = new Budget(file);
+    expect(a.callsLastHour()).toBe(1);
+    expect(a.spentLastHour()).toBeCloseTo(0.25);
+    a.record("claude-haiku-5-5", { input_tokens: 1_000_000, output_tokens: 0 } as never);
+    const b = new Budget(file);
+    expect(b.callsLastHour()).toBe(2);
+    expect(b.spentLastHour()).toBeCloseTo(0.35);
+  });
+});
