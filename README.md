@@ -28,22 +28,19 @@ counts as local.
 
 ## Watching
 
-The view is isometric: drag (or swipe) to pan, scroll or pinch to zoom, and the
-⌖ button jumps back to the storehouse. Hover anything for a tooltip; click a
+The view is top-down with a slight three-quarter tilt, in the manner of Stardew
+Valley: drag (or swipe) to pan, scroll or pinch to zoom in whole steps, and the
+⌖ button jumps back to the camp. Hover anything for a tooltip; click a
 villager or a building to open the inspector (needs, bonds, memories, or who
 lives where and how a crop is doing). Clicking an entry in the event feed swings
 the camera to where it happened. Night darkens the map and fires and windows
 glow; rain, storms (with lightning) and snow fall over the scene.
 
-**Art.** Out of the box everything is drawn in code
-(`client/src/render/sprites.ts`), so there are no image files to manage. The
-viewer can also use the *Cozy Isometric Exterior* pixel-art pack by Choco Ted
-for grass, paths, trees and cottages, with the rest still drawn in code at a
-matching scale. Its licence forbids redistributing the files, so the pack is
-not in git: drop the zip into `client/public/pack/` on each machine and run
-`npm run pack -w client` (or `npm run build`, which does it first). See
-`client/public/pack/README.md`. The free version is credited in the hint bar.
-Zoom steps are whole numbers so the pixels stay crisp.
+**Art.** Everything is drawn in code for now (`client/src/render/art.ts`) on a
+16-pixel grid, so there are no image files to manage. The plan is to replace
+the stand-ins with CC0 pixel-art packs from Kenney (Roguelike/RPG Pack,
+Roguelike Characters, Tiny Town), committed to the repo so they arrive with
+`git pull`. Zoom steps are whole numbers so the pixels stay crisp.
 
 **TV mode.** Open the viewer with `?tv=1` (or press T) for an ambient picture
 suited to a living-room screen: the panels disappear, the pointer hides, a

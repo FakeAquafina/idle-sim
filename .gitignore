@@ -13,5 +13,3 @@ server/data/budget.json
 server/data/budget.json.tmp
 server/data/proposals.json
 server/data/proposals.json.tmp
-client/public/pack/*
-!client/public/pack/README.md

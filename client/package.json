@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "pack": "node scripts/pack.mjs",
-    "prebuild": "node scripts/pack.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit"
   },

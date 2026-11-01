@@ -5,10 +5,10 @@
 
 import type { Application, Container, FederatedPointerEvent } from "pixi.js";
 
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 4;
-/** Wheel zoom lands on these so pixel art stays crisp; pinch zoom is free. */
-const ZOOM_STEPS = [0.5, 1, 2, 3, 4];
+const MIN_SCALE = 1;
+const MAX_SCALE = 5;
+/** Wheel zoom lands on these so 16px pixel art stays crisp; pinch zoom is free. */
+const ZOOM_STEPS = [1, 2, 3, 4, 5];
 
 export class Camera {
   private pointers = new Map<number, { x: number; y: number }>();

@@ -174,7 +174,7 @@ export class TvDirector {
 
   /** Zoom for watching people: whole numbers keep the pixel art crisp; tighter on a big screen. */
   private closeScale(): number {
-    return window.innerWidth >= 2500 ? 4 : window.innerWidth >= 1500 ? 3 : 2;
+    return window.innerWidth >= 2500 ? 5 : window.innerWidth >= 1500 ? 4 : 3;
   }
 
   private wideScale(): number {

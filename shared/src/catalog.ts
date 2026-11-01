@@ -32,7 +32,7 @@ export interface StructureDef {
   capacity?: number;
   /** Docks must touch water, mines must touch rock or ore. */
   mustTouch?: PlacementNeed;
-  /** Clear tiles kept around the footprint (default 1). Cottages with wide eaves want 2. */
+  /** Clear tiles kept around the footprint (default 1). */
   margin?: number;
   /** Hex color used by the placeholder renderer. */
   color: number;
@@ -47,13 +47,14 @@ export const STRUCTURES: Record<string, StructureDef> = {
     cost: { wood: 30, stone: 10 },
     buildTicks: 12000,
     function: "storage",
+    margin: 2,
     color: 0x8b5a2b,
   },
   house: {
     label: "House",
     description: "Shelter for up to two villagers. Needed to rest well and stay warm.",
-    w: 2,
-    h: 4,
+    w: 4,
+    h: 3,
     cost: { wood: 20, stone: 5 },
     buildTicks: 9000,
     function: "shelter",
@@ -84,8 +85,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
   shrine: {
     label: "Shrine",
     description: "Where villagers speak to the unseen provider.",
-    w: 1,
-    h: 1,
+    w: 2,
+    h: 2,
     cost: { stone: 8 },
     buildTicks: 4000,
     function: "petition",
@@ -94,7 +95,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   dock: {
     label: "Dock",
     description: "A wooden jetty on the shore. Fishing from it is much faster than from the beach.",
-    w: 2,
+    w: 3,
     h: 1,
     cost: { wood: 10 },
     buildTicks: 4000,
@@ -132,6 +133,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     cost: { wood: 15, stone: 10, ore: 5 },
     buildTicks: 8000,
     function: "crafting",
+    margin: 2,
     color: 0x7a6250,
   },
   market: {

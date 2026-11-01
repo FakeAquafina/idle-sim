@@ -94,6 +94,7 @@ describe("plan validation", () => {
     expect(w.structures.some((s) => s.kind === "well" && !s.built)).toBe(true);
     w.structures = w.structures.filter((s) => s.built);
     w.storehouse.wood = 0;
+    for (const o of w.villagers) o.stock.wood = o.inventory.wood = 0; // nobody owns any either
     expect(planToGoal(w, v, plan({ action: "build", target: "house" })).reason).toMatch(/materials/);
   });
 });
