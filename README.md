@@ -33,9 +33,17 @@ The view is isometric: drag (or swipe) to pan, scroll or pinch to zoom, and the
 villager or a building to open the inspector (needs, bonds, memories, or who
 lives where and how a crop is doing). Clicking an entry in the event feed swings
 the camera to where it happened. Night darkens the map and fires and windows
-glow; rain, storms (with lightning) and snow fall over the scene. All of the
-art is drawn in code (`client/src/render/sprites.ts`), so there are no image
-files to manage; swap it for real sprites later without touching the sim.
+glow; rain, storms (with lightning) and snow fall over the scene.
+
+**Art.** Out of the box everything is drawn in code
+(`client/src/render/sprites.ts`), so there are no image files to manage. The
+viewer can also use the *Cozy Isometric Exterior* pixel-art pack by Choco Ted
+for grass, paths, trees and cottages, with the rest still drawn in code at a
+matching scale. Its licence forbids redistributing the files, so the pack is
+not in git: drop the zip into `client/public/pack/` on each machine and run
+`npm run pack -w client` (or `npm run build`, which does it first). See
+`client/public/pack/README.md`. The free version is credited in the hint bar.
+Zoom steps are whole numbers so the pixels stay crisp.
 
 **TV mode.** Open the viewer with `?tv=1` (or press T) for an ambient picture
 suited to a living-room screen: the panels disappear, the pointer hides, a

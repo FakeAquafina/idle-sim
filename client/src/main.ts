@@ -4,6 +4,8 @@ import { Mirror, type MirrorState, connect } from "./net.ts";
 import { Atmosphere } from "./render/atmosphere.ts";
 import { Camera } from "./render/camera.ts";
 import { MAX_TILE_H, MIN_TILE_H, TILE_H, projection, setTileHeight } from "./render/projection.ts";
+import { loadPack } from "./render/pack.ts";
+import { setBuildScale } from "./render/sprites.ts";
 import { type Pick, Scene } from "./render/scene.ts";
 import { highlightSpeed, setupAdminBar, showAdminMessage, updateAdminSettings } from "./ui/admin.ts";
 import { addChronicleEntry, resetChronicle, setLearned, setupChronicle } from "./ui/chronicle.ts";
@@ -41,11 +43,19 @@ if (Number.isFinite(savedAngle) && savedAngle > 0) setTileHeight(savedAngle);
 if (params.has("angle")) history.replaceState(null, "", location.pathname);
 
 const app = new Application();
-await app.init({ resizeTo: window, background: 0x12161b, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true });
+await app.init({ resizeTo: window, background: 0x12161b, antialias: false, resolution: window.devicePixelRatio || 1, autoDensity: true, roundPixels: true });
 document.getElementById("game")!.appendChild(app.canvas);
 
+// The optional pixel-art pack (see client/public/pack/README.md); null means everything is drawn in code.
+const pack = await loadPack();
+if (pack) {
+  setBuildScale(1.8); // code-drawn buildings grow to sit beside the pack's cottages
+  const hint = document.getElementById("hint");
+  if (hint) hint.textContent += ` · art: ${pack.name} by ${pack.credit}`;
+}
+
 const mirror = new Mirror();
-const scene = new Scene(app.renderer);
+const scene = new Scene(app.renderer, pack);
 const atmosphere = new Atmosphere();
 app.stage.addChild(scene.root, atmosphere.gfx);
 const camera = new Camera(app, scene.root);
@@ -167,7 +177,7 @@ function centerOnVillage(): void {
   const fire = s.structures.find((x) => x.kind === "campfire" && x.built);
   const at = fire ? { x: fire.x + 0.5, y: fire.y + 0.5 } : s.camp ? { x: s.camp.x + 0.5, y: s.camp.y + 0.5 } : { x: s.width / 2, y: s.height / 2 };
   const c = projection.toScreen(at.x, at.y);
-  camera.centerOn(c.x, c.y, window.innerWidth > 900 ? 1.6 : 1.1);
+  camera.centerOn(c.x, c.y, window.innerWidth > 900 ? 2 : 1);
 }
 
 let jumpTimer: ReturnType<typeof setTimeout> | null = null;
@@ -185,7 +195,7 @@ function jumpTo(target: { pos?: Vec2; villagerId?: string }): void {
     pick = { kind: "tile", x: target.pos.x, y: target.pos.y };
   }
   if (!p) return;
-  camera.centerOn(p.x, p.y, Math.max(camera.scale, 1.6));
+  camera.centerOn(p.x, p.y, Math.max(camera.scale, 2));
   scene.setHover(pick);
   if (jumpTimer) clearTimeout(jumpTimer);
   jumpTimer = setTimeout(() => scene.setHover(null), 1800);

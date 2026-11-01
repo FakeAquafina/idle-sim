@@ -5,8 +5,10 @@
 
 import type { Application, Container, FederatedPointerEvent } from "pixi.js";
 
-const MIN_SCALE = 0.4;
-const MAX_SCALE = 5;
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 4;
+/** Wheel zoom lands on these so pixel art stays crisp; pinch zoom is free. */
+const ZOOM_STEPS = [0.5, 1, 2, 3, 4];
 
 export class Camera {
   private pointers = new Map<number, { x: number; y: number }>();
@@ -37,6 +39,7 @@ export class Camera {
         this.dragDistance += Math.abs(dx) + Math.abs(dy);
         this.target.x += dx;
         this.target.y += dy;
+        this.snap();
       }
       this.pointers.set(e.pointerId, cur);
       if (this.pointers.size === 2) {
@@ -60,8 +63,12 @@ export class Camera {
       (e) => {
         e.preventDefault();
         this.glide = null;
-        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-        this.zoomAt(e.offsetX, e.offsetY, factor);
+        // Step to the next integer zoom rather than scaling smoothly.
+        const cur = this.scale;
+        let i = ZOOM_STEPS.findIndex((z) => Math.abs(z - cur) < 1e-6);
+        if (i < 0) i = ZOOM_STEPS.findIndex((z) => z > cur) - (e.deltaY < 0 ? 1 : 0);
+        const next = ZOOM_STEPS[Math.max(0, Math.min(ZOOM_STEPS.length - 1, i + (e.deltaY < 0 ? 1 : -1)))];
+        this.zoomAt(e.offsetX, e.offsetY, next / cur);
       },
       { passive: false },
     );
@@ -83,6 +90,16 @@ export class Camera {
     t.x = sx - (sx - t.x) * ratio;
     t.y = sy - (sy - t.y) * ratio;
     t.scale.set(newScale);
+    this.snap();
+  }
+
+  /** At whole-number zoom, keep the view on whole pixels so sprites don't shimmer. */
+  private snap(): void {
+    const t = this.target;
+    if (Number.isInteger(t.scale.x)) {
+      t.x = Math.round(t.x);
+      t.y = Math.round(t.y);
+    }
   }
 
   /** Center the view on a point given in the target's local pixels. */
@@ -91,6 +108,7 @@ export class Camera {
     if (scale !== undefined) t.scale.set(Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale)));
     t.x = this.app.screen.width / 2 - px * t.scale.x;
     t.y = this.app.screen.height / 2 - py * t.scale.y;
+    this.snap();
   }
 
   /** The target-local point currently under the middle of the screen. */

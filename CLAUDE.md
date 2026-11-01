@@ -11,8 +11,9 @@ files named by purpose, plain Node + systemd over heavier infrastructure, ARM-fr
 ## Layout
 npm workspaces: `shared/` (types, Zod schemas, catalog), `server/` (Fastify + WS,
 deterministic sim, Claude "brains"), `client/` (Vite + PixiJS viewer).
-Art is drawn in code in `client/src/render/sprites.ts`; the view angle is `TILE_H`
-in `client/src/render/projection.ts`.
+Art is drawn in code in `client/src/render/sprites.ts`, with an optional pixel-art pack
+(not in git; see `client/public/pack/README.md`) loaded by `client/src/render/pack.ts`.
+The view angle is `TILE_H` in `client/src/render/projection.ts`.
 
 ## Working here
 - Node 22. On macOS with Homebrew: `export PATH=/opt/homebrew/bin:$PATH`.

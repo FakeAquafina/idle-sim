@@ -425,10 +425,20 @@ export function drawAnimal(g: Graphics, kind: "deer" | "goat", tame: boolean, st
 
 // ---- Buildings ------------------------------------------------------------------------
 
+/**
+ * Code-drawn buildings are drawn this much taller than their 1× design. The
+ * pixel-art pack's cottages are big, so with the pack on this is 1.8.
+ */
+let BUILD_SCALE = 1;
+export function setBuildScale(k: number): void {
+  BUILD_SCALE = k;
+}
+
 /** How tall each kind stands above its footprint, in pixels (0 = flat). Used for sorting and hit tests. */
 export function structureHeight(kind: string, built: boolean): number {
   if (!built) return 0;
-  return { house: 16, storehouse: 12, workshop: 13, mine: 9, shrine: 14, well: 14, campfire: 6, dock: 3, pen: 5, farm: 0, market: 12 }[kind] ?? 8;
+  const base = { house: 16, storehouse: 12, workshop: 13, mine: 9, shrine: 14, well: 14, campfire: 6, dock: 3, pen: 5, farm: 0, market: 12 }[kind] ?? 8;
+  return Math.round(base * (kind === "campfire" || kind === "pen" || kind === "dock" ? 1 : BUILD_SCALE));
 }
 
 interface Pt {
@@ -448,7 +458,8 @@ function corners(w: number, h: number) {
 }
 
 /** A box standing on the footprint: two visible walls and a flat top. */
-function isoBox(g: Graphics, w: number, h: number, height: number, leftWall: number, rightWall: number, top: number): void {
+function isoBox(g: Graphics, w: number, h: number, height0: number, leftWall: number, rightWall: number, top: number): void {
+  const height = Math.round(height0 * BUILD_SCALE);
   const c = corners(w, h);
   g.poly(pts(c.left, c.bottom, up(c.bottom, height), up(c.left, height))).fill(leftWall).stroke({ color: OUTLINE, width: 1, alpha: 0.6 });
   g.poly(pts(c.bottom, c.right, up(c.right, height), up(c.bottom, height))).fill(rightWall).stroke({ color: OUTLINE, width: 1, alpha: 0.6 });
@@ -456,7 +467,9 @@ function isoBox(g: Graphics, w: number, h: number, height: number, leftWall: num
 }
 
 /** A pitched roof on top of a box, ridge running along world x (top → right). Returns the ridge ends. */
-function gableRoof(g: Graphics, w: number, h: number, height: number, rise: number, front: number, back: number, gable: number, snow: boolean): { a: Pt; b: Pt } {
+function gableRoof(g: Graphics, w: number, h: number, height0: number, rise0: number, front: number, back: number, gable: number, snow: boolean): { a: Pt; b: Pt } {
+  const height = Math.round(height0 * BUILD_SCALE);
+  const rise = Math.round(rise0 * BUILD_SCALE);
   const c = corners(w, h);
   const T = up(c.top, height), R = up(c.right, height), B = up(c.bottom, height), L = up(c.left, height);
   const ridgeA = up(mid(T, L), rise);
@@ -539,8 +552,8 @@ export function drawStructure(g: Graphics, s: Structure, def: StructureDef, pal:
       if (!snow)
         for (let i = 1; i < 4; i++) {
           const t = i / 4;
-          const a = up(mid(c.top, c.left, t), 12);
-          const b = up(mid(c.right, c.bottom, t), 12);
+          const a = up(mid(c.top, c.left, t), Math.round(12 * BUILD_SCALE));
+          const b = up(mid(c.right, c.bottom, t), Math.round(12 * BUILD_SCALE));
           g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ color: 0x3f2f22, width: 1, alpha: 0.7 });
         }
       // Plank lines on the walls.

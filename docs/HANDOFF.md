@@ -54,10 +54,19 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
   addresses are believed (loopback by default). Not used in the Tailscale setup.
 - View angle: classic 16 (TILE_H). The owner tried 20 and 14; what looked "weird" was
   the tiled-floor ground and black void around the map, both fixed. `?angle=N` tunes it live.
-- Graphics: move to an asset pack now. A CC0 Kenney isometric set (owner has no
-  preference), committed into the repo, tiles and buildings from the pack with code-drawn
-  villagers kept until a matching character set turns up. The view angle becomes fixed at
-  the pack's 2:1 (TILE_H 16) and the live `?angle` tuning goes. 3D is parked.
+- Graphics: the owner rejected Kenney's smooth isometric sets (wrong vibe) and chose the
+  pixel-art **Cozy Isometric Exterior** by Choco Ted (itch.io). The free version is in use:
+  grass (flat tiles + a cliff cell for the map's near edges), the 47-tile path autotile
+  (used for dirt), two green and two dry trees, two cottages. Its licence forbids
+  redistribution, so `client/public/pack/` is gitignored; `client/scripts/pack.mjs`
+  unpacks a dropped zip into named PNGs + `manifest.json` (runs on `npm run build`), and
+  `client/src/render/pack.ts` loads them. Without the pack the viewer draws everything in
+  code exactly as before. With it: villagers/animals draw at 2×, code-drawn buildings at
+  1.8× height (`setBuildScale`), houses are 2×4 tiles with a 2-tile margin, several
+  footprints grew (storehouse 4×3, mine/workshop 3×3, pen 4×3, market 3×2), and zoom
+  snaps to whole numbers. Credit shown in the hint bar. The pack's grid is 32×16 like ours,
+  so the view angle stays 16. Buying the full pack would let the remaining buildings move
+  over; the mapping lives in `pack.mjs` (WANT) and `scene.ts` (`drawStructureView`).
 - Fresh worlds (built): villagers start with the clothes on their backs, no buildings at
   all; a wood and a rocky outcrop lie within a short walk of the camp (`w.camp`). The
   shrine is placed hidden at generation 10-22 tiles out (`Structure.hidden`), drawn faint
@@ -119,10 +128,8 @@ All five phases of the plan are built and on GitHub (`FakeAquafina/idle-sim`, pu
 
 ## Pending and ideas
 
-- Resource pack: blocked in the cloud session because kenney.nl, itch.io and
-  opengameart.org are denied by the environment's network policy. Allow `kenney.nl` under
-  the environment's network settings (or drop a pack zip into the repo) and the swap can
-  proceed.
+- Art pack follow-ups: more of the pack (full version) for storehouse, well, market,
+  workshop; a pack sprite for saplings; the cliff edge only shows on two sides (fine).
 - The moderator has not been exercised against the real API yet (no key in the cloud
   session): the first real proposal is worth reading closely, and the system prompt in
   `moderator.ts` is where to tune its taste.

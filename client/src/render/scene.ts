@@ -7,6 +7,7 @@
 import { Container, Graphics, type Renderer, Sprite, Text } from "pixi.js";
 import { STRUCTURES, TICKS_PER_SECOND, type Animal, type Merchant, type Season, type Structure, type Tile, type VillagerView } from "@idle-sim/shared";
 import type { MirrorState } from "../net.ts";
+import { type Pack, pathMaskKey } from "./pack.ts";
 import { TILE_H, TILE_W, footprint, projection } from "./projection.ts";
 import {
   PALETTES,
@@ -53,6 +54,10 @@ interface Decor {
 interface StructureView {
   root: Container;
   gfx: Graphics;
+  /** A pack sprite standing in for the code drawing (houses). */
+  sprite: Sprite | null;
+  /** Where smoke rises from, relative to the root, or null for no smoke. */
+  smokeAt: { x: number; y: number } | null;
   flame: Graphics | null;
   smoke: Graphics | null;
   label: Text;
@@ -90,10 +95,22 @@ const BUBBLE_FADE_IN_MS = 180;
 const LABEL_STYLE = { fontSize: 9, fill: 0xffffff, fontFamily: "ui-monospace, Menlo, monospace", stroke: { color: 0x101418, width: 2 } };
 const WALK_FRAME_MS = 160;
 
+/** How tall a pack house stands above its footprint, for labels and hit tests. */
+const PACK_HOUSE_HEIGHT = 68;
+/** Pack house sprite offset from the footprint's top corner (base diamond bottom vertex at (45.5, 111) in the 128×112 image). */
+const PACK_HOUSE_OFFSET = { x: -78, y: -63 };
+/** Chimney-ish point on the pack house roof, relative to the footprint's top corner. */
+const PACK_HOUSE_SMOKE = { x: 10, y: -41 };
+/** Seasonal tint on pack grass and trees. */
+const PACK_TINT: Record<Season, number> = { spring: 0xffffff, summer: 0xffffff, autumn: 0xead9ae, winter: 0xc9d5e2 };
+
 export class Scene {
   readonly root = new Container();
   private surroundings = new Graphics();
   private ground = new Graphics();
+  /** Pack ground tiles (grass, paths) as sprites, over the code-drawn ground. */
+  private groundTiles = new Container();
+  private groundSprites = new Map<number, { sprite: Sprite; key: string }>();
   private hover = new Graphics();
   private objects = new Container();
   private labels = new Container();
@@ -108,10 +125,22 @@ export class Scene {
   private hovered: Pick | null = null;
   state: MirrorState | null = null;
 
-  constructor(private renderer: Renderer) {
+  constructor(
+    private renderer: Renderer,
+    private pack: Pack | null = null,
+  ) {
     this.textures = bakeDecor(renderer, this.pal);
     this.objects.sortableChildren = true;
-    this.root.addChild(this.surroundings, this.ground, this.hover, this.objects, this.labels);
+    this.root.addChild(this.surroundings, this.ground, this.groundTiles, this.hover, this.objects, this.labels);
+  }
+
+  get hasPack(): boolean {
+    return this.pack !== null;
+  }
+
+  /** People and animals are drawn at this scale: the pack's cottages expect figures twice our 1× size. */
+  private get moverScale(): number {
+    return this.pack ? 2 : 1;
   }
 
   // ---- Building the scene -----------------------------------------------------
@@ -124,6 +153,7 @@ export class Scene {
       v.label.destroy();
     }
     this.structureViews.clear();
+    this.clearGroundSprites();
     for (const v of this.villagerViews.values()) {
       v.root.destroy({ children: true });
       v.bubble.destroy({ children: true });
@@ -142,6 +172,11 @@ export class Scene {
     this.decor.clear();
   }
 
+  private clearGroundSprites(): void {
+    for (const g of this.groundSprites.values()) g.sprite.destroy();
+    this.groundSprites.clear();
+  }
+
   /** Swap palettes and rebake the trees and rocks when the season turns. */
   private applySeason(season: Season): void {
     if (season === this.season && this.textures) return;
@@ -150,6 +185,7 @@ export class Scene {
     destroyDecor(this.textures);
     this.textures = bakeDecor(this.renderer, this.pal);
     this.clearDecor();
+    this.clearGroundSprites(); // pack tiles take the season's tint
     for (const v of this.structureViews.values()) v.key = ""; // snow on the roofs
   }
 
@@ -163,17 +199,73 @@ export class Scene {
     const W = state.width;
     const kindAt = (x: number, y: number): Tile["kind"] | null => (x < 0 || y < 0 || x >= W || y >= state.height ? null : state.tiles[y * W + x].kind);
     const land = (k: Tile["kind"] | null) => k !== null && k !== "water";
+    const seen = new Set<number>();
     for (let y = 0; y < state.height; y++) {
       for (let x = 0; x < W; x++) {
         const t = state.tiles[y * W + x];
         const p = projection.toScreen(x + 0.5, y + 0.5);
-        let shore: Shore | undefined;
-        if (t.kind === "water") shore = { n: land(kindAt(x, y - 1)), e: land(kindAt(x + 1, y)), s: land(kindAt(x, y + 1)), w: land(kindAt(x - 1, y)) };
-        drawGroundTile(g, p.x, p.y, t, x, y, this.pal, shore);
+        const packKey = this.pack ? this.packTileKey(state, x, y, t) : null;
+        if (packKey) {
+          seen.add(y * W + x);
+          this.syncGroundSprite(y * W + x, packKey, p.x, p.y, state, x, y, t);
+        } else {
+          let shore: Shore | undefined;
+          if (t.kind === "water") shore = { n: land(kindAt(x, y - 1)), e: land(kindAt(x + 1, y)), s: land(kindAt(x, y + 1)), w: land(kindAt(x - 1, y)) };
+          drawGroundTile(g, p.x, p.y, t, x, y, this.pal, shore);
+        }
         const nearWater = t.kind !== "water" && [kindAt(x, y - 1), kindAt(x + 1, y), kindAt(x, y + 1), kindAt(x - 1, y)].includes("water");
         this.syncDecor(x, y, t, W, nearWater);
       }
     }
+    for (const [i, gs] of this.groundSprites) {
+      if (!seen.has(i)) {
+        gs.sprite.destroy();
+        this.groundSprites.delete(i);
+      }
+    }
+  }
+
+  /** Which pack tile (if any) stands for this ground tile. Null means draw it in code. */
+  private packTileKey(state: MirrorState, x: number, y: number, t: Tile): string | null {
+    if (t.kind === "grass" || t.kind === "forest") {
+      const edge = x === state.width - 1 || y === state.height - 1;
+      if (edge) return "cliff";
+      const h = hash(x, y, 13) % 100;
+      return `grass${h < 90 ? 0 : h < 97 ? 1 : h < 99 ? 2 : 3}`;
+    }
+    if (t.kind === "dirt") {
+      const W = state.width;
+      const path = (xx: number, yy: number) => xx >= 0 && yy >= 0 && xx < W && yy < state.height && state.tiles[yy * W + xx].kind === "dirt";
+      return `path${pathMaskKey({ ne: path(x, y - 1), se: path(x + 1, y), sw: path(x, y + 1), nw: path(x - 1, y), top: path(x - 1, y - 1), right: path(x + 1, y - 1), bottom: path(x + 1, y + 1), left: path(x - 1, y + 1) })}`;
+    }
+    return null;
+  }
+
+  private syncGroundSprite(i: number, key: string, cx: number, cy: number, state: MirrorState, x: number, y: number, t: Tile): void {
+    const existing = this.groundSprites.get(i);
+    if (existing?.key === key) return;
+    if (existing) {
+      existing.sprite.destroy();
+      this.groundSprites.delete(i);
+    }
+    const pack = this.pack!;
+    let tex;
+    if (key === "cliff") tex = pack.cliff;
+    else if (key.startsWith("grass")) tex = pack.grass[Number(key.slice(5))];
+    else tex = pack.path.get(key.slice(4)) ?? pack.path.get("00000000")!;
+    const sprite = new Sprite(tex);
+    // Flat tiles are 32×16 centred on the tile; the cliff cell is 32×32 with its diamond in the top half.
+    sprite.anchor.set(0.5, key === "cliff" ? 0.25 : 0.5);
+    sprite.position.set(Math.round(cx), Math.round(cy));
+    sprite.tint = PACK_TINT[this.season];
+    // Near-edge cliffs must draw over their neighbours' flat tops, so they go last.
+    if (key === "cliff") this.groundTiles.addChild(sprite);
+    else this.groundTiles.addChildAt(sprite, 0);
+    this.groundSprites.set(i, { sprite, key });
+    void state;
+    void x;
+    void y;
+    void t;
   }
 
   private syncDecor(x: number, y: number, t: Tile, width: number, nearWater: boolean): void {
@@ -188,6 +280,19 @@ export class Scene {
     if (!key) return;
     const h = hash(x, y, 7);
     const big = t.amount >= 7;
+    if (this.pack && key.startsWith("forest") && t.amount >= 5) {
+      // A pack tree: 64×80 with its trunk foot near the bottom middle.
+      const dry = this.season === "autumn" || this.season === "winter";
+      const sprite = new Sprite((dry ? this.pack.treesDry : this.pack.treesGreen)[h % 2]);
+      sprite.anchor.set(0.5, 0.96);
+      sprite.tint = this.season === "winter" ? 0xd8e0e8 : 0xffffff;
+      const p = projection.toScreen(x + 0.5, y + 0.5);
+      sprite.position.set(Math.round(p.x + ((h >> 4) % 5) - 2), Math.round(p.y + ((h >> 8) % 3) - 1));
+      sprite.zIndex = projection.depth(x + 0.5, y + 0.5);
+      this.objects.addChild(sprite);
+      this.decor.set(i, { sprite, key });
+      return;
+    }
     const tex =
       key.startsWith("forest") ? this.textures.trees[h % 2][big ? 1 : 0]
       : key.startsWith("rock") ? this.textures.rock[big ? 1 : 0]
@@ -232,7 +337,7 @@ export class Scene {
         root.addChild(gfx);
         this.labels.addChild(label);
         this.objects.addChild(root);
-        view = { root, gfx, flame: null, smoke: null, label, key: "", s };
+        view = { root, gfx, sprite: null, smokeAt: null, flame: null, smoke: null, label, key: "", s };
         this.structureViews.set(s.id, view);
       }
       view.s = s;
@@ -250,13 +355,35 @@ export class Scene {
     }
   }
 
+  /** Pixels a building stands above its footprint, pack sprite or code drawing. */
+  private heightOf(s: Structure): number {
+    return this.pack && s.kind === "house" && s.built ? PACK_HOUSE_HEIGHT : structureHeight(s.kind, s.built);
+  }
+
   private drawStructureView(view: StructureView, s: Structure): void {
     const def = STRUCTURES[s.kind];
     const p = projection.toScreen(s.x, s.y);
     view.root.position.set(p.x, p.y);
     view.gfx.clear();
-    drawStructure(view.gfx, s, def, this.pal);
-    const height = structureHeight(s.kind, s.built);
+    const packHouse = this.pack && s.kind === "house" && s.built;
+    if (packHouse) {
+      if (!view.sprite) {
+        view.sprite = new Sprite();
+        view.root.addChildAt(view.sprite, 0);
+      }
+      view.sprite.texture = this.pack!.houses[hash(s.x, s.y, 3) % this.pack!.houses.length];
+      view.sprite.position.set(PACK_HOUSE_OFFSET.x, PACK_HOUSE_OFFSET.y);
+      view.sprite.tint = this.pal.snow ? 0xe0e6ee : 0xffffff;
+      view.smokeAt = PACK_HOUSE_SMOKE;
+    } else {
+      if (view.sprite) {
+        view.sprite.destroy();
+        view.sprite = null;
+      }
+      drawStructure(view.gfx, s, def, this.pal);
+      view.smokeAt = chimneyPoint(s);
+    }
+    const height = this.heightOf(s);
     // Tall things sort by their front corner, flat things sit just under whatever stands on them.
     view.root.zIndex = height > 0 ? projection.depth(s.x + s.w, s.y + s.h) - 0.5 : projection.depth(s.x, s.y) - 0.5;
 
@@ -264,7 +391,7 @@ export class Scene {
       view.flame = new Graphics();
       view.root.addChild(view.flame);
     }
-    if (s.built && chimneyPoint(s) && !view.smoke) {
+    if (s.built && view.smokeAt && !view.smoke) {
       view.smoke = new Graphics();
       view.root.addChild(view.smoke);
     }
@@ -282,6 +409,7 @@ export class Scene {
     const body = new Container();
     const frames: [Graphics, Graphics, Graphics] = [new Graphics(), new Graphics(), new Graphics()];
     body.addChild(...frames);
+    body.scale.set(this.moverScale);
     root.addChild(body);
     this.objects.addChild(root);
     return { root, body, frames, target: { x: 0, y: 0 }, key: "", facing: 1 };
@@ -316,7 +444,7 @@ export class Scene {
       const key = `${v.stage}|${v.speech?.text ?? ""}|${resting}|${carrying}`;
       if (look.key !== key) {
         look.key = key;
-        look.height = villagerHeight(v.stage);
+        look.height = villagerHeight(v.stage) * this.moverScale;
         const opts = lookFor(v.id, v.stage, resting, carrying);
         this.redrawMover(look, (g, step) => drawVillager(g, opts, step));
         if (v.speech) {
@@ -361,7 +489,7 @@ export class Scene {
     bubble.addChild(bubbleBg, bubbleText);
     bubble.visible = false;
     this.labels.addChild(name, bubble);
-    return { ...mover, name, bubble, bubbleBg, bubbleText, bubbleW: 0, bubbleH: 0, speechUntil: 0, bubbleShownAt: 0, height: villagerHeight(v.stage) };
+    return { ...mover, name, bubble, bubbleBg, bubbleText, bubbleW: 0, bubbleH: 0, speechUntil: 0, bubbleShownAt: 0, height: villagerHeight(v.stage) * this.moverScale };
   }
 
   // ---- Animals --------------------------------------------------------------------
@@ -407,7 +535,7 @@ export class Scene {
       m.root.x += dx * k;
       m.root.y += dy * k;
       if (Math.abs(dx) > 0.4) m.facing = dx < 0 ? -1 : 1;
-      m.body.scale.x = m.facing;
+      m.body.scale.x = m.facing * this.moverScale;
       const frame = moving ? walkStep : 0;
       for (let i = 0; i < 3; i++) m.frames[i].visible = i === frame;
       const w = projection.toWorld(m.root.x, m.root.y);
@@ -431,7 +559,7 @@ export class Scene {
         drawFlame(view.flame, m.x, m.y, t);
       }
       if (view.smoke) {
-        const cp = chimneyPoint(view.s);
+        const cp = view.smokeAt;
         const lived = view.s.kind !== "house" || view.s.ownerIds.length > 0;
         if (cp) drawSmoke(view.smoke, cp.x, cp.y, t + hash(view.s.x, view.s.y) % 7, lived ? smokeStrength : 0);
       }
@@ -489,18 +617,19 @@ export class Scene {
   pick(lx: number, ly: number): Pick | null {
     const s = this.state;
     if (!s) return null;
+    const ms = this.moverScale;
     for (const [id, look] of this.villagerViews) {
       const dx = lx - look.root.x;
       const dy = ly - look.root.y;
-      if (Math.abs(dx) <= 6 && dy <= 3 && dy >= -look.height - 2) return { kind: "villager", id };
+      if (Math.abs(dx) <= 6 * ms && dy <= 3 * ms && dy >= -look.height - 2) return { kind: "villager", id };
     }
     for (const [id, look] of this.animalViews) {
       const dx = lx - look.root.x;
       const dy = ly - look.root.y;
-      if (Math.abs(dx) <= 6 && dy <= 2 && dy >= -12) return { kind: "animal", id };
+      if (Math.abs(dx) <= 6 * ms && dy <= 2 * ms && dy >= -12 * ms) return { kind: "animal", id };
     }
     for (const st of s.structures) {
-      const h = structureHeight(st.kind, st.built);
+      const h = this.heightOf(st);
       for (const dy of h > 0 ? [0, h] : [0]) {
         const w = projection.toWorld(lx, ly + dy);
         if (w.x >= st.x && w.x < st.x + st.w && w.y >= st.y && w.y < st.y + st.h) return { kind: "structure", id: st.id };

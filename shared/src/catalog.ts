@@ -32,6 +32,8 @@ export interface StructureDef {
   capacity?: number;
   /** Docks must touch water, mines must touch rock or ore. */
   mustTouch?: PlacementNeed;
+  /** Clear tiles kept around the footprint (default 1). Cottages with wide eaves want 2. */
+  margin?: number;
   /** Hex color used by the placeholder renderer. */
   color: number;
 }
@@ -40,8 +42,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
   storehouse: {
     label: "Storehouse",
     description: "A common store. Villagers donate surplus here and anyone may draw on it when their own runs out.",
-    w: 3,
-    h: 2,
+    w: 4,
+    h: 3,
     cost: { wood: 30, stone: 10 },
     buildTicks: 12000,
     function: "storage",
@@ -51,11 +53,12 @@ export const STRUCTURES: Record<string, StructureDef> = {
     label: "House",
     description: "Shelter for up to two villagers. Needed to rest well and stay warm.",
     w: 2,
-    h: 2,
+    h: 4,
     cost: { wood: 20, stone: 5 },
     buildTicks: 9000,
     function: "shelter",
     capacity: 2,
+    margin: 2,
     color: 0xc98f5a,
   },
   farm: {
@@ -102,8 +105,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
   mine: {
     label: "Mine",
     description: "A shaft dug beside rock. Yields stone and, if the vein is good, ore. Veins run dry eventually.",
-    w: 2,
-    h: 2,
+    w: 3,
+    h: 3,
     cost: { wood: 12 },
     buildTicks: 6000,
     function: "mining",
@@ -113,8 +116,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
   pen: {
     label: "Pen",
     description: "A fenced yard for goats. Tame goats give food over time and breed slowly.",
-    w: 3,
-    h: 2,
+    w: 4,
+    h: 3,
     cost: { wood: 12 },
     buildTicks: 3500,
     function: "livestock",
@@ -124,8 +127,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
   workshop: {
     label: "Workshop",
     description: "Tools and a bench. Needs ore. Everyone works a quarter faster once it stands.",
-    w: 2,
-    h: 2,
+    w: 3,
+    h: 3,
     cost: { wood: 15, stone: 10, ore: 5 },
     buildTicks: 8000,
     function: "crafting",
@@ -134,8 +137,8 @@ export const STRUCTURES: Record<string, StructureDef> = {
   market: {
     label: "Market stall",
     description: "A stall where villagers sell surplus for coin and buy what they lack. A travelling merchant restocks it and buys what the village has too much of.",
-    w: 2,
-    h: 1,
+    w: 3,
+    h: 2,
     cost: { wood: 10 },
     buildTicks: 3000,
     function: "market",

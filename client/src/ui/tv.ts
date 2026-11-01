@@ -172,13 +172,13 @@ export class TvDirector {
     if (this.speechEl.innerHTML !== html) this.speechEl.innerHTML = html;
   }
 
-  /** Zoom for watching people: tighter on a big screen so faces read from the sofa. */
+  /** Zoom for watching people: whole numbers keep the pixel art crisp; tighter on a big screen. */
   private closeScale(): number {
-    return clamp(window.innerWidth / 800, 1.6, 2.6);
+    return window.innerWidth >= 2500 ? 4 : window.innerWidth >= 1500 ? 3 : 2;
   }
 
   private wideScale(): number {
-    return clamp(window.innerWidth / 1100, 1.2, 2);
+    return this.closeScale() - 1;
   }
 
   private async keepAwake(): Promise<void> {
@@ -195,9 +195,6 @@ function pick<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, n));
-}
 
 function setText(el: HTMLElement, text: string): void {
   if (el.textContent !== text) el.textContent = text;

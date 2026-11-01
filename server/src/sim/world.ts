@@ -339,10 +339,11 @@ export function canAfford(w: WorldState, cost: Inventory): boolean {
 export function canPlace(w: WorldState, kind: string, x: number, y: number): boolean {
   const def = STRUCTURES[kind];
   if (!def) return false;
+  const m = def.margin ?? 1;
   if (x < 1 || y < 1 || x + def.w > w.width - 1 || y + def.h > w.height - 1) return false;
-  for (let yy = y - 1; yy <= y + def.h; yy++) {
-    for (let xx = x - 1; xx <= x + def.w; xx++) {
-      if (structureAt(w, xx, yy)) return false; // keep a 1-tile gap between buildings
+  for (let yy = y - m; yy <= y + def.h + m - 1; yy++) {
+    for (let xx = x - m; xx <= x + def.w + m - 1; xx++) {
+      if (structureAt(w, xx, yy)) return false; // keep a gap between buildings (wider for cottages)
       const inside = xx >= x && xx < x + def.w && yy >= y && yy < y + def.h;
       if (inside) {
         const k = tileAt(w, xx, yy).kind;
